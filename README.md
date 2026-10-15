@@ -1,4 +1,4 @@
-# Oslo Moon Tracker
+# Moon Tracker
 
 A single-file, no-dependencies sky simulator that shows the real position and phase of the moon, the brightest stars and the planets, as seen through a fixed wide-angle "lens" from anywhere on Earth. It starts over Oslo, Norway (59.91°N, 10.75°E).
 
