@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<!-- Oslo Moon Tracker — © 2026 Tiny Puddle™ — free to use under the MIT License — https://github.com/Shrimpifieddev -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oslo Moon Tracker</title>
+<style>
+:root{
+  --bg:#111111; --bg2:#181818; --panel:#1a1a1a; --line:#333333; --text:#f2f2f2; --dim:#8c8c8c;
+  --gold:#ffffff; --north:#ffffff; --moon:#f2f2f2;
+  --serif:'Iowan Old Style','Palatino Linotype',Georgia,serif; --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+html{height:100%}
+body{
+  margin:0;min-height:100%;color:var(--text);font-family:var(--sans);
+  background:var(--bg);
+  padding:calc(env(safe-area-inset-top,0px) + 22px) 20px calc(env(safe-area-inset-bottom,0px) + 28px);
+}
+header{max-width:1180px;margin:0 auto 20px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{font:400 clamp(1.6rem,3vw,2.3rem)/1.1 var(--serif);margin:0;letter-spacing:.01em}
+.chip{font-size:.78rem;color:var(--dim);border:1px solid var(--line);border-radius:99px;padding:4px 11px}
+main{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:24px;align-items:start}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+.scope-wrap{display:flex;justify-content:center}
+.scope{
+  position:relative;width:min(100%,78vh,740px);aspect-ratio:1/1;border-radius:50%;overflow:hidden;
+  cursor:grab;touch-action:pan-y;
+  box-shadow:0 0 0 6px #000,0 0 0 8px #3a3a3a,0 24px 60px rgba(0,0,0,.6);
+}
+.scope:active{cursor:grabbing}
+.scope canvas{width:100%;height:100%;display:block}
+.scope::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,transparent 70%,rgba(0,0,0,.55) 100%)}
+.hint{text-align:center;color:var(--dim);font-size:.78rem;margin:16px 0 0}
+.side{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font:600 .7rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:#111;border:1px solid #2a2a2a;border-radius:10px;padding:10px 12px}
+.stat .l{font-size:.68rem;color:var(--dim);display:block;margin-bottom:2px}
+.stat .v{font:400 1.35rem var(--serif)}
+.badge{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:.85rem}
+.dot{width:9px;height:9px;border-radius:50%;background:#555}
+.dot.up{background:#fff}
+.aimrow{display:flex;align-items:center;gap:14px}
+.rose{width:112px;flex:none}.rose svg{width:100%;display:block}
+.aimctl{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+#aimLabel{font:400 1.15rem var(--serif);color:var(--gold)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,input{font-family:var(--sans);font-size:.85rem;color:var(--text)}
+button{background:#222;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;transition:.15s}
+button:hover{border-color:var(--gold)}
+button.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--gold)}
+input[type=datetime-local]{background:#111;border:1px solid var(--line);border-radius:9px;padding:7px 9px;flex:1 1 180px;color-scheme:dark}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.pl{display:grid;grid-template-columns:1.1fr .7fr 1.5fr;gap:8px;padding:7px 0;border-bottom:1px solid #262626;font-size:.88rem}
+.pl.dn{color:var(--dim)}.cd{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}.pl:last-child{border-bottom:0}
+button{min-height:42px}
+input[type=datetime-local]{min-height:42px;font-size:16px}
+input[type=range]{height:30px}
+@media(max-width:600px){
+  body{padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 22px)}
+  main{gap:18px}
+  .scope{box-shadow:0 0 0 4px #000,0 0 0 6px #3a3a3a,0 14px 36px rgba(0,0,0,.6)}
+  .aimrow{flex-direction:column;align-items:stretch}
+  .rose{width:150px;margin:0 auto}
+  .row button{flex:1 1 30%}
+  .seg button{flex:1 1 40%}
+  input[type=datetime-local]{flex:1 1 100%}
+  .stat .v{font-size:1.2rem}
+}
+footer a{color:var(--text)}
+footer{max-width:1180px;margin:22px auto 0;color:var(--dim);font-size:.72rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Oslo Moon Tracker</h1>
+  <span class="chip">59.91°N · 10.75°E</span>
+  <span class="chip" id="clock"></span>
+</header>
+<main>
+  <section>
+    <div class="scope-wrap"><div class="scope" id="scope"><canvas id="sky" width="1000" height="1000"></canvas></div></div>
+    <p class="hint">Drag the view to turn · fixed true-angle lens, ~83° wide</p>
+  </section>
+  <section class="side">
+    <div class="card">
+      <h2>The moon right now</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="card">
+      <h2>Planets</h2>
+      <div id="planets"></div>
+    </div>
+    <div class="card">
+      <h2>Lens direction</h2>
+      <div class="aimrow">
+        <div class="rose"><svg viewBox="0 0 100 100" aria-label="Compass">
+          <circle cx="50" cy="50" r="46" fill="#111" stroke="#444" stroke-width="2"/>
+          <path d="M50 50 L22.5 17.8 A42 42 0 0 1 77.5 17.8 Z" fill="rgba(255,255,255,.18)" stroke="#fff" stroke-width="1"/>
+          <g id="rose" font-family="system-ui,sans-serif" font-size="11" text-anchor="middle" fill="#9a9a9a"></g>
+          <circle cx="50" cy="50" r="2.5" fill="#fff"/></svg></div>
+        <div class="aimctl">
+          <span id="aimLabel"></span>
+          <input type="range" id="aim" min="0" max="359" value="180" aria-label="Lens heading">
+          <div class="row"><button id="aimL">◀ 10°</button><button id="aimR">10° ▶</button><button id="aimS">Face S</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Time</h2>
+      <div class="row" style="margin-bottom:10px"><input type="datetime-local" id="dt"><button id="nowBtn">Now</button><button id="playBtn">▶ Play</button></div>
+      <div class="seg" id="speeds">
+        <button data-s="1">1 s/s</button><button data-s="3600" class="on">1 h/s</button><button data-s="86400">1 day/s</button><button data-s="604800">1 wk/s</button>
+      </div>
+    </div>
+  </section>
+</main>
+<footer>Low-precision lunar ephemeris (a few arc-minutes) — great for gameplay, not navigation. Moon disc drawn larger than life so it's visible.<br>© 2026 Tiny Puddle™ · Free to use under the MIT License · <a href="https://github.com/Shrimpifieddev" target="_blank" rel="noopener">Shrimpified on GitHub</a></footer>
+
+<script>
+const LAT=59.9139, LON=10.7522;
+const W=1000, SPAN=83, PPD=W/SPAN, HZ=W*0.7;   // equal px/degree on both axes = true angles
+const cv=document.getElementById('sky'), ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const d2r=d=>d*Math.PI/180, r2d=r=>r*180/Math.PI, n360=x=>((x%360)+360)%360, w180=d=>((d%360)+540)%360-180, pad=n=>String(n).padStart(2,'0');
+let simTime=new Date(), playing=false, speed=3600, heading=180;
+
+// [name, RA hours (J2000), Dec deg (J2000), magnitude] — brightest stars that can be seen from Oslo
+const STARS=[['Sirius',6.7525,-16.716,-1.46],['Arcturus',14.261,19.182,-0.05],['Vega',18.6156,38.784,0.03],['Capella',5.2782,45.998,0.08],['Rigel',5.2423,-8.202,0.13],['Procyon',7.655,5.225,0.34],['Betelgeuse',5.9195,7.407,0.5],['Altair',19.8464,8.868,0.76],['Aldebaran',4.5987,16.509,0.85],['Antares',16.4901,-26.432,0.96],['Spica',13.4199,-11.161,0.97],['Pollux',7.7553,28.026,1.14],['Fomalhaut',22.9608,-29.622,1.16],['Deneb',20.6905,45.28,1.25],['Regulus',10.1395,11.967,1.35],['Castor',7.5767,31.888,1.58],['Bellatrix',5.4189,6.35,1.64],['Elnath',5.4382,28.608,1.65],['Alnilam',5.6036,-1.202,1.69],['Alnitak',5.6793,-1.943,1.77],['Mintaka',5.5334,-0.299,2.23],['Saiph',5.7959,-9.67,2.06],['Dubhe',11.0621,61.751,1.79],['Merak',11.0307,56.382,2.37],['Phecda',11.8972,53.695,2.44],['Megrez',12.2571,57.033,3.31],['Alioth',12.9005,55.96,1.77],['Mizar',13.3988,54.925,2.04],['Alkaid',13.7923,49.313,1.86],['Polaris',2.5302,89.264,1.98],['Kochab',14.8451,74.156,2.08],['Pherkad',15.3455,71.834,3.05],['Alphard',9.4598,-8.659,1.98],['Hamal',2.1196,23.462,2.0],['Mirfak',3.4054,49.861,1.79],['Algol',3.1361,40.956,2.1],['Schedar',0.6751,56.537,2.24],['Caph',0.1529,59.15,2.27],['Navi',0.9451,60.717,2.47],['Ruchbah',1.4303,60.235,2.68],['Segin',1.9067,63.67,3.37],['Alpheratz',0.1398,29.091,2.06],['Mirach',1.1622,35.621,2.05],['Almach',2.065,42.33,2.1],['Diphda',0.7265,-17.987,2.04],['Enif',21.7364,9.875,2.39],['Markab',23.0793,15.205,2.49],['Scheat',23.0629,28.083,2.42],['Algenib',0.2206,15.184,2.83],['Sadr',20.3705,40.257,2.23],['Gienah',20.7702,33.97,2.46],['Albireo',19.512,27.96,3.18],['Rasalhague',17.5822,12.56,2.08],['Rasalgethi',17.2441,14.39,3.0],['Kornephoros',16.5037,21.49,2.77],['Eltanin',17.9434,51.489,2.23],['Rastaban',17.5072,52.301,2.79],['Thuban',14.0731,64.376,3.65],['Izar',14.7498,27.074,2.35],['Alphecca',15.5781,26.715,2.22],['Zubenelgenubi',14.8478,-16.042,2.75],['Zubeneschamali',15.2835,-9.383,2.61],['Unukalhai',15.7378,6.426,2.65],['Menkar',3.038,4.09,2.53],['Alcyone',3.7914,24.105,2.87],['Mebsuta',6.7322,25.131,3.06],['Alhena',6.6285,16.399,1.93],['Mirzam',6.3783,-17.956,1.98],['Wezen',7.1399,-26.393,1.83],['Menkalinan',5.9921,44.947,1.9],['Tejat',6.3827,22.514,2.88],['Algieba',10.3329,19.842,2.28],['Denebola',11.8177,14.572,2.14],['Zosma',11.2351,20.524,2.56],['Vindemiatrix',13.0364,10.959,2.83],['Muphrid',13.9114,18.398,2.68],['Sabik',17.173,-15.725,2.43],['Dschubba',16.0056,-22.622,2.29],['Nunki',18.9211,-26.297,2.05],['Sheliak',18.8347,33.363,3.5],['Sulafat',18.9824,32.69,3.25],['Tarazed',19.771,10.613,2.72],['Alshain',19.9219,6.407,3.71],['Alderamin',21.3096,62.586,2.45],['Alfirk',21.4777,70.561,3.2],['Errai',23.6558,77.632,3.21]];
+// Planet orbits: JPL low-precision elements (a,e,I,L,peri,node + rates per century), J2000 ecliptic
+const PEL={Mercury:[.38709927,.20563593,7.00497902,252.2503235,77.45779628,48.33076593,.00000037,.00001906,-.00594749,149472.67411175,.16047689,-.12534081],Venus:[.72333566,.00677672,3.39467605,181.9790995,131.60246718,76.67984255,.0000039,-.00004107,-.0007889,58517.81538729,.00268329,-.27769418],Earth:[1.00000261,.01671123,-.00001531,100.46457166,102.93768193,0,.00000562,-.00004392,-.01294668,35999.37244981,.32327364,0],Mars:[1.52371034,.0933941,1.84969142,-4.55343205,-23.94362959,49.55953891,.00001847,.00007882,-.00813131,19140.30268499,.44441088,-.29257343],Jupiter:[5.202887,.04838624,1.30439695,34.39644051,14.72847983,100.47390909,-.00011607,-.00013253,-.00183714,3034.74612775,.21252668,.20469106],Saturn:[9.53667594,.05386179,2.48599187,49.95424423,92.59887831,113.66242448,-.0012506,-.00050991,.00193609,1222.49362201,-.41897216,-.28867794],Uranus:[19.18916464,.04725744,.77263783,313.23810451,170.9542763,74.01692503,-.00196176,-.00004397,-.00242939,428.48202785,.40805281,.04240589],Neptune:[30.06992276,.00859048,1.77004347,-55.12002969,44.96476227,131.78422574,.00026291,.00005105,.00035372,218.45945325,-.32241464,-.00508664]};
+const PCOL={Mercury:'#b9a98f',Venus:'#f7e5a2',Mars:'#e0623a',Jupiter:'#e8b987',Saturn:'#edd488',Uranus:'#8fe6ee',Neptune:'#4a74f0'};
+const PMAG={Mercury:i=>-.42+.038*i-.000273*i*i+2e-6*i**3,Venus:i=>-4.4+.0009*i+.000239*i*i-6.5e-7*i**3,Mars:i=>-1.52+.016*i,Jupiter:i=>-9.4+.005*i,Saturn:()=>-8.88,Uranus:()=>-7.19,Neptune:()=>-6.87};
+function helio(n,T){
+  const [a0,e0,I0,L0,w0,O0,a1,e1,I1,L1,w1,O1]=PEL[n];
+  const a=a0+a1*T,e=e0+e1*T,I=d2r(I0+I1*T),L=L0+L1*T,w=w0+w1*T,O=d2r(O0+O1*T);
+  const M=d2r(n360(L-w));let E=M;for(let i=0;i<12;i++)E=M+e*Math.sin(E);
+  const xp=a*(Math.cos(E)-e),yp=a*Math.sqrt(1-e*e)*Math.sin(E),om=d2r(w)-O;
+  const co=Math.cos(om),so=Math.sin(om),cO=Math.cos(O),sO=Math.sin(O),cI=Math.cos(I),sI=Math.sin(I);
+  return [(co*cO-so*sO*cI)*xp+(-so*cO-co*sO*cI)*yp,(co*sO+so*cO*cI)*xp+(-so*sO+co*cO*cI)*yp,so*sI*xp+co*sI*yp];
+}
+function horizon(ra,dec,lst){ // equatorial (rad) -> [alt,az] deg for Oslo
+  const H=d2r(lst)-ra,pl=d2r(LAT);
+  const alt=r2d(Math.asin(Math.sin(dec)*Math.sin(pl)+Math.cos(dec)*Math.cos(pl)*Math.cos(H)));
+  const az=n360(r2d(Math.atan2(-Math.cos(dec)*Math.sin(H),Math.sin(dec)*Math.cos(pl)-Math.cos(dec)*Math.sin(pl)*Math.cos(H))));
+  return [alt,az];
+}
+function planetsNow(jd,lst){
+  const T=(jd-2451545)/36525,yrs=(jd-2451545)/365.25,eps=d2r(23.43928),E=helio('Earth',T),R=Math.hypot(...E);
+  return ['Mercury','Venus','Mars','Jupiter','Saturn','Uranus','Neptune'].map(n=>{
+    const p=helio(n,T),g=[p[0]-E[0],p[1]-E[1],p[2]-E[2]],d=Math.hypot(...g),r=Math.hypot(...p);
+    const i=r2d(Math.acos(Math.max(-1,Math.min(1,(r*r+d*d-R*R)/(2*r*d)))));
+    const mag=PMAG[n](i)+5*Math.log10(r*d);
+    const ye=g[1]*Math.cos(eps)-g[2]*Math.sin(eps),ze=g[1]*Math.sin(eps)+g[2]*Math.cos(eps);
+    const a0=Math.atan2(ye,g[0]),d0=Math.asin(ze/d);
+    const ra=a0+d2r((3.075+1.336*Math.sin(a0)*Math.tan(d0))*15/3600*yrs),de=d0+d2r(20.04/3600*Math.cos(a0)*yrs);
+    const [alt,az]=horizon(ra,de,lst);
+    return {n,alt,az,mag};
+  });
+}
+
+const toJD=d=>d.getTime()/864e5+2440587.5;
+const fmtIn=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const dirName=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(n360(d)/45)%8];
+function phaseName(e){e=n360(e);return e<22.5||e>=337.5?'New Moon':e<67.5?'Waxing Crescent':e<112.5?'First Quarter':e<157.5?'Waxing Gibbous':e<202.5?'Full Moon':e<247.5?'Waning Gibbous':e<292.5?'Last Quarter':'Waning Crescent'}
+
+function compute(){
+  const jd=toJD(simTime), T=(jd-2451545)/36525;
+  const Lp=n360(218.3164477+481267.88123421*T), D=d2r(n360(297.8501921+445267.1114034*T)), Ms=n360(357.5291092+35999.0502909*T);
+  const m=d2r(Ms), mp=d2r(n360(134.9633964+477198.8675055*T)), f=d2r(n360(93.272095+483202.0175233*T));
+  const lon=n360(Lp+6.289*Math.sin(mp)-1.274*Math.sin(mp-2*D)+.658*Math.sin(2*D)-.186*Math.sin(m)-.059*Math.sin(2*mp-2*D)-.057*Math.sin(mp-2*D+m)+.053*Math.sin(mp+2*D));
+  const lat=5.128*Math.sin(f)+.281*Math.sin(mp+f)-.278*Math.sin(f-mp)-.173*Math.sin(2*D-f);
+  const sun=n360(n360(280.46646+36000.76983*T)+(1.914602-.004817*T)*Math.sin(m)+.019993*Math.sin(2*m));
+  const el=n360(lon-sun), k=(1-Math.cos(d2r(el)))/2;
+  const eps=d2r(23.439291-.0130042*T), lo=d2r(lon), la=d2r(lat);
+  const ra=Math.atan2(Math.sin(lo)*Math.cos(eps)-Math.tan(la)*Math.sin(eps),Math.cos(lo));
+  const dec=Math.asin(Math.sin(la)*Math.cos(eps)+Math.cos(la)*Math.sin(eps)*Math.sin(lo));
+  const gmst=n360(280.46061837+360.98564736629*(jd-2451545)+.000387933*T*T);
+  const H=d2r(n360(gmst+LON))-ra, ph=d2r(LAT);
+  const alt=r2d(Math.asin(Math.sin(dec)*Math.sin(ph)+Math.cos(dec)*Math.cos(ph)*Math.cos(H)));
+  const az=n360(r2d(Math.atan2(-Math.cos(dec)*Math.sin(H),Math.sin(dec)*Math.cos(ph)-Math.cos(dec)*Math.sin(ph)*Math.cos(H))));
+  const lo2=d2r(sun), ra2=Math.atan2(Math.sin(lo2)*Math.cos(eps),Math.cos(lo2)), dec2=Math.asin(Math.sin(eps)*Math.sin(lo2));
+  const lst=n360(gmst+LON), H2=d2r(lst)-ra2;
+  const sunAlt=r2d(Math.asin(Math.sin(dec2)*Math.sin(ph)+Math.cos(dec2)*Math.cos(ph)*Math.cos(H2)));
+  return {alt,az,k,waxing:el<180,el,lst,jd,sunAlt,planets:planetsNow(jd,lst)};
+}
+
+function moonDisc(cx,cy,r,k,waxing){
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.clip();
+  ctx.fillStyle='#f2f2f2';ctx.fillRect(cx-r,cy-r,2*r,2*r);
+  ctx.fillStyle='#0d0d0d';ctx.beginPath();ctx.arc(cx+(waxing?-1:1)*2*r*k,cy,r,0,7);ctx.fill();ctx.restore();
+  ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.strokeStyle='rgba(255,255,255,.2)';ctx.stroke();
+}
+
+function render(s){
+  const X=az=>W/2+w180(az-heading)*PPD, Y=alt=>HZ-alt*PPD;
+  const sc=(cv.clientWidth||W)/W, m=Math.max(1,.55/sc), fz=px=>Math.round(px*Math.max(1,.85/sc)); // keep dots and text readable when the scope is small
+  let g=ctx.createLinearGradient(0,0,0,HZ);
+  g.addColorStop(0,'#000');g.addColorStop(.7,'#0b0b0b');g.addColorStop(1,'#262626');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,W);
+
+  const vis=Math.max(0,Math.min(1,(-s.sunAlt-3)/15)); // stars fade in through twilight, gone in daylight
+  if(vis>0){
+    const yrs=(s.jd-2451545)/365.25, pl=d2r(LAT);
+    STARS.forEach(([nm,rah,dd,mag])=>{
+      const a0=rah*15*Math.PI/180, d0=d2r(dd);
+      const ra=a0+d2r((3.075+1.336*Math.sin(a0)*Math.tan(d0))*15/3600*yrs); // precession since J2000
+      const de=d0+d2r(20.04/3600*Math.cos(a0)*yrs);
+      const H=d2r(s.lst)-ra;
+      const alt=r2d(Math.asin(Math.sin(de)*Math.sin(pl)+Math.cos(de)*Math.cos(pl)*Math.cos(H)));
+      if(alt<-1)return;
+      const az=n360(r2d(Math.atan2(-Math.cos(de)*Math.sin(H),Math.sin(de)*Math.cos(pl)-Math.cos(de)*Math.sin(pl)*Math.cos(H))));
+      const x=X(az), y=Y(alt);
+      if(x<-30||x>W+30||y<-30||y>HZ+5)return;
+      const r=Math.max(1.1,3.8-.8*mag)*m;
+      ctx.fillStyle=`rgba(255,255,255,${vis*Math.max(.35,Math.min(1,.8-.18*(mag-1)))})`;
+      ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+      if(mag<1.5){ctx.font=fz(12)+'px system-ui,sans-serif';ctx.textAlign='left';ctx.fillStyle=`rgba(255,255,255,${.45*vis})`;ctx.fillText(nm,x+r+5,y+4)}
+    });
+  }
+
+  ctx.font=fz(13)+'px system-ui,sans-serif';ctx.textAlign='left';
+  [15,30,45,60].forEach(a=>{ctx.strokeStyle='rgba(255,255,255,.12)';ctx.setLineDash([6,8]);ctx.beginPath();ctx.moveTo(0,Y(a));ctx.lineTo(W,Y(a));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,255,255,.4)';ctx.fillText(a+'°',W/2-14,Y(a)-5)});
+
+  // ecliptic: the path the sun, moon and planets follow
+  ctx.strokeStyle='rgba(255,255,255,.16)';ctx.setLineDash([3,7]);ctx.lineWidth=1.2;ctx.beginPath();
+  let pen=false;
+  for(let lam=0;lam<=360;lam+=2){
+    const l=d2r(lam),e=d2r(23.44);
+    const [ea,ez]=horizon(Math.atan2(Math.sin(l)*Math.cos(e),Math.cos(l)),Math.asin(Math.sin(e)*Math.sin(l)),s.lst);
+    const x=X(ez),y=Y(ea);
+    if(ea<0||x<-60||x>W+60){pen=false;continue}
+    pen?ctx.lineTo(x,y):ctx.moveTo(x,y);pen=true;
+  }
+  ctx.stroke();ctx.setLineDash([]);
+
+  s.planets.forEach(p=>{
+    if(p.alt<-1)return;
+    const x=X(p.az),y=Y(p.alt);if(x<-40||x>W+40||y<-40||y>HZ+5)return;
+    const v=Math.max(0,Math.min(1,(-s.sunAlt-3+(p.mag<0?-p.mag*2:0))/15));if(v<=0)return;
+    const r=1.08*Math.max(2.2,4.4-.9*p.mag)*m;
+    ctx.globalAlpha=v;ctx.fillStyle=PCOL[p.n];ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+    ctx.strokeStyle=PCOL[p.n];ctx.globalAlpha=.55*v;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(x,y,r+4*m,0,7);ctx.stroke();ctx.globalAlpha=1;
+    ctx.font='bold '+fz(13)+'px system-ui,sans-serif';ctx.textAlign='left';ctx.fillStyle=`rgba(255,255,255,${.85*v})`;ctx.fillText(p.n,x+r+9,y+4);
+  });
+
+  if(s.alt>-3){
+    const mx=X(s.az),my=Y(s.alt),r=34*Math.min(m,1.5);
+    const h=ctx.createRadialGradient(mx,my,r*.8,mx,my,r*5);h.addColorStop(0,'rgba(255,255,255,.2)');h.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=h;ctx.fillRect(mx-r*5,my-r*5,r*10,r*10);
+    moonDisc(mx,my,r,s.k,s.waxing);
+  }
+
+  g=ctx.createLinearGradient(0,HZ,0,W);g.addColorStop(0,'#2e2e2e');g.addColorStop(.25,'#1c1c1c');g.addColorStop(1,'#0a0a0a');
+  ctx.fillStyle=g;ctx.fillRect(0,HZ,W,W-HZ);
+  ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,HZ);ctx.lineTo(W,HZ);ctx.stroke();
+
+  ctx.textAlign='center';
+  [[0,'N'],[45,'NE'],[90,'E'],[135,'SE'],[180,'S'],[225,'SW'],[270,'W'],[315,'NW']].forEach(([d,l])=>{
+    const x=X(d);if(x<-40||x>W+40)return;
+    ctx.fillStyle='rgba(255,255,255,.75)';ctx.font=(l.length>1?fz(13)+'px':'bold '+fz(17)+'px')+' system-ui,sans-serif';ctx.fillText(l,x,HZ+30);
+    ctx.strokeStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.moveTo(x,HZ);ctx.lineTo(x,HZ+(l.length>1?7:11));ctx.stroke();
+  });
+}
+
+function ui(s){
+  $('stats').innerHTML=`
+    <div class="stat"><span class="l">Altitude</span><span class="v">${s.alt.toFixed(1)}°</span></div>
+    <div class="stat"><span class="l">Azimuth</span><span class="v">${s.az.toFixed(1)}° ${dirName(s.az)}</span></div>
+    <div class="stat"><span class="l">Phase</span><span class="v" style="font-size:1.05rem">${phaseName(s.el)}</span></div>
+    <div class="stat"><span class="l">Illuminated</span><span class="v">${Math.round(s.k*100)}%</span></div>
+    <div class="badge"><span class="dot ${s.alt>0?'up':''}"></span>${s.alt>0?'Above the horizon':'Below the horizon'}</div>`;
+  $('planets').innerHTML=[...s.planets].sort((a,b)=>b.alt-a.alt).map(p=>`<div class="pl ${p.alt>0?'':'dn'}"><span><i class="cd" style="background:${PCOL[p.n]}"></i>${p.n}</span><span>${p.mag>=0?'+':''}${p.mag.toFixed(1)}</span><span>${p.alt>0?p.alt.toFixed(0)+'° · '+dirName(p.az):'below horizon'}</span></div>`).join('');
+  $('rose').innerHTML=[[0,'N'],[90,'E'],[180,'S'],[270,'W']].map(([d,l])=>{const a=d2r(d-heading),fs=10+4*Math.max(0,Math.cos(a));return `<text x="${(50+33*Math.sin(a)).toFixed(1)}" y="${(50-33*Math.cos(a)+fs*.35).toFixed(1)}" font-size="${fs.toFixed(1)}">${l}</text>`}).join('');
+  $('aimLabel').textContent=`Facing ${dirName(heading)} ${Math.round(heading)%360}°`;
+  $('clock').textContent=simTime.toLocaleString([], {dateStyle:'medium',timeStyle:'short'});
+}
+
+function draw(){const s=compute();render(s);ui(s)}
+function setHeading(h){heading=n360(h);$('aim').value=Math.round(heading)%360;draw()}
+
+$('aim').oninput=e=>setHeading(+e.target.value);
+$('aimL').onclick=()=>setHeading(heading-10);$('aimR').onclick=()=>setHeading(heading+10);$('aimS').onclick=()=>setHeading(180);
+let dx=null;const sc=$('scope');
+sc.addEventListener('pointerdown',e=>{dx=e.clientX;sc.setPointerCapture(e.pointerId)});
+sc.addEventListener('pointermove',e=>{if(dx===null)return;const d=e.clientX-dx;dx=e.clientX;setHeading(heading-d/sc.getBoundingClientRect().width*SPAN)});
+['pointerup','pointercancel'].forEach(t=>sc.addEventListener(t,()=>dx=null));
+
+$('dt').value=fmtIn(simTime);
+$('dt').onchange=e=>{const v=new Date(e.target.value);if(!isNaN(v)){simTime=v;draw()}};
+$('nowBtn').onclick=()=>{simTime=new Date();$('dt').value=fmtIn(simTime);draw()};
+$('playBtn').onclick=e=>{playing=!playing;e.target.textContent=playing?'⏸ Pause':'▶ Play'};
+document.querySelectorAll('#speeds button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#speeds button').forEach(x=>x.classList.remove('on'));b.classList.add('on');speed=+b.dataset.s});
+
+let last=null;
+(function loop(t){
+  if(last!==null&&playing){simTime=new Date(simTime.getTime()+(t-last)*speed);$('dt').value=fmtIn(simTime);draw()}
+  last=t;requestAnimationFrame(loop);
+})(0);
+window.addEventListener('resize',()=>draw());
+draw();
+</script>
+</body>
+</html>
