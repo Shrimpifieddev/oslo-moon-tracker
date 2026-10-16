@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<!-- Moon Tracker — © 2026 Tiny Puddle™ — free to use under the MIT License — https://github.com/Shrimpifieddev -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moon Tracker</title>
+<style>
+  :root {
+    --bg: #111111;
+    --panel: #1a1a1a;
+    --line: #333333;
+    --text: #f2f2f2;
+    --dim: #8c8c8c;
+    --accent: #ffffff;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { height: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    color: var(--text);
+    font-family: var(--sans);
+    background: var(--bg);
+    padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  }
+
+  /* ---- page layout ---- */
+  header {
+    max-width: 1500px;
+    margin: 0 auto 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 16px;
+  }
+  h1 {
+    font: 400 clamp(1.6rem, 3vw, 2.3rem)/1.1 var(--serif);
+    margin: 0;
+    letter-spacing: .01em;
+  }
+  .chip {
+    font-size: .78rem;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    padding: 4px 11px;
+  }
+  main {
+    max-width: 1500px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+
+  /* ---- the round sky view ---- */
+  .scope-wrap { display: flex; justify-content: center; }
+  .scope {
+    position: relative;
+    width: min(100%, 78vh, 740px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: pan-y;
+    box-shadow: 0 0 0 6px #000, 0 0 0 8px #3a3a3a, 0 24px 60px rgba(0, 0, 0, .6);
+  }
+  .scope:active { cursor: grabbing; }
+  .scope canvas { width: 100%; height: 100%; display: block; }
+  .scope::after {               /* soft vignette around the edge */
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle, transparent 70%, rgba(0, 0, 0, .55) 100%);
+  }
+  .hint { text-align: center; color: var(--dim); font-size: .78rem; margin: 16px 0 0; }
+
+  /* ---- side cards ---- */
+  .side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  @media (max-width: 700px) { .side { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2,
+  .card summary {
+    font: 600 .7rem var(--sans);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0 0 12px;
+  }
+  /* collapsible cards: the title row is the toggle */
+  .card summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .card summary::-webkit-details-marker { display: none; }
+  .card summary::after { content: "▾"; font-size: .95rem; transition: transform .15s; }
+  details.card:not([open]) summary::after { transform: rotate(-90deg); }
+  details.card:not([open]) summary { margin-bottom: 0; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: #111; border: 1px solid #2a2a2a; border-radius: 10px; padding: 10px 12px; }
+  .stat .l { font-size: .68rem; color: var(--dim); display: block; margin-bottom: 2px; }
+  .stat .v { font: 400 1.35rem var(--serif); }
+  .badge { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: .85rem; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #555; }
+  .dot.up { background: #fff; }
+
+  .aimrow { display: flex; align-items: center; gap: 14px; }
+  .rose { width: 112px; flex: none; }
+  .rose svg { width: 100%; display: block; }
+  .aimctl { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  #aimLabel { font: 400 1.15rem var(--serif); color: var(--accent); }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  button, input { font-family: var(--sans); font-size: .85rem; color: var(--text); }
+  button {
+    background: #222;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 12px;
+    min-height: 42px;
+    cursor: pointer;
+    transition: .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=range] { width: 100%; height: 30px; accent-color: var(--accent); }
+  input[type=datetime-local] {
+    background: #111;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 7px 9px;
+    flex: 1 1 180px;
+    min-height: 42px;
+    font-size: 16px;
+    color-scheme: dark;
+  }
+  #coord {
+    flex: 1 1 160px;
+    min-height: 42px;
+    background: #111;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 7px 9px;
+    font-size: 16px;
+  }
+
+  .pl { display: grid; grid-template-columns: 1.1fr .7fr 1.5fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid #262626; font-size: .88rem; }
+  .pl:last-child { border-bottom: 0; }
+  .pl.dn { color: var(--dim); }
+  .cd { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
+
+  #globe { width: min(100%, 320px); aspect-ratio: 1 / 1; display: block; margin: 0 auto; touch-action: none; cursor: grab; }
+  .tiny { font-size: .74rem; color: var(--dim); }
+  #cities button { flex: 0 1 auto; min-height: 34px; padding: 5px 10px; font-size: .8rem; }
+  footer { max-width: 1500px; margin: 22px auto 0; color: var(--dim); font-size: .72rem; }
+  footer a { color: var(--text); }
+
+  @media (max-width: 600px) {
+    body { padding: calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 22px); }
+    main { gap: 18px; }
+    .scope { box-shadow: 0 0 0 4px #000, 0 0 0 6px #3a3a3a, 0 14px 36px rgba(0, 0, 0, .6); }
+    .aimrow { flex-direction: column; align-items: stretch; }
+    .rose { width: 150px; margin: 0 auto; }
+    .row button { flex: 1 1 30%; }
+    .seg button { flex: 1 1 40%; }
+    input[type=datetime-local] { flex: 1 1 100%; }
+    .stat .v { font-size: 1.2rem; }
+  }
+
+  /* ---- page outline; the bottom line is the ground the tiny dude lives on ---- */
+  body { position: relative; border: 1.5px solid var(--text); border-radius: 14px; margin: 10px 10px calc(150px + env(safe-area-inset-bottom, 0px)); }
+  body > footer { position: absolute; top: calc(100% + 20px); left: 14px; right: 14px; max-width: 1100px; margin: 0 auto; text-align: center; line-height: 1.6; }
+  .vspace { height: 64px; }
+  #village { position: absolute; left: 0; bottom: 0; width: 100%; height: 80px; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Moon Tracker</h1>
+  <span class="chip" id="place"></span>
+  <span class="chip" id="clock"></span>
+  <span class="chip" id="villageStatus" role="status"></span>
+</header>
+
+<main>
+  <section>
+    <div class="scope-wrap">
+      <div class="scope" id="scope"><canvas id="sky" width="1000" height="1000"></canvas></div>
+    </div>
+    <p class="hint">Drag the view to turn · fixed true-angle lens, ~83° wide</p>
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <button id="realBtn" aria-pressed="false">◔ Realistic sizes</button>
+    </div>
+    <p class="hint" id="skyNote" role="status"></p>
+  </section>
+
+  <section class="side">
+    <div class="col">
+    <div class="card">
+      <h2>Pick a place</h2>
+      <canvas id="globe" width="600" height="600" aria-label="Globe: drag to spin, tap to choose a place"></canvas>
+      <div class="row" style="margin:10px 0 8px">
+        <button id="spinBtn" class="on">⟳ Spin</button>
+        <button id="locBtn">◎ My location</button>
+        <span class="tiny">drag to turn · tap to choose</span>
+      </div>
+      <div class="row" style="margin:0 0 8px">
+        <input id="coord" type="text" inputmode="decimal" placeholder="lat, lon  e.g. 59.91, 10.75" aria-label="Latitude and longitude">
+        <button id="coordBtn">Go</button>
+      </div>
+      <p class="tiny" id="locMsg" role="status" style="margin:0 0 8px"></p>
+      <div class="seg" id="cities"></div>
+      <p class="tiny" style="margin:10px 0 0">● you &nbsp; ● moon overhead &nbsp; ☀ sun overhead &nbsp; shaded = night</p>
+    </div>
+    </div>
+    <div class="col">
+    <div class="card">
+      <h2>Lens direction</h2>
+      <div class="aimrow">
+        <div class="rose">
+          <svg viewBox="0 0 100 100" aria-label="Compass">
+            <circle cx="50" cy="50" r="46" fill="#111" stroke="#444" stroke-width="2"/>
+            <path d="M50 50 L22.5 17.8 A42 42 0 0 1 77.5 17.8 Z" fill="rgba(255,255,255,.18)" stroke="#fff" stroke-width="1"/>
+            <g id="rose" font-family="system-ui,sans-serif" font-size="11" text-anchor="middle" fill="#9a9a9a"></g>
+            <circle cx="50" cy="50" r="2.5" fill="#fff"/>
+          </svg>
+        </div>
+        <div class="aimctl">
+          <span id="aimLabel"></span>
+          <input type="range" id="aim" min="0" max="359" value="180" aria-label="Lens heading">
+          <div class="row">
+            <button id="aimL">◀ 10°</button>
+            <button id="aimR">10° ▶</button>
+            <button id="aimS">Face S</button>
+            <button id="aimM">Face moon</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Time</h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="datetime-local" id="dt">
+        <button id="nowBtn">Now</button>
+        <button id="playBtn">▶ Play</button>
+        <button id="nightBtn">🌙 Next night here</button>
+      </div>
+      <div class="seg" id="speeds">
+        <button data-s="1">1 s/s</button>
+        <button data-s="3600" class="on">1 h/s</button>
+        <button data-s="86400">1 day/s</button>
+        <button data-s="604800">1 wk/s</button>
+      </div>
+    </div>
+    <details class="card" id="sunCard">
+      <summary>The sun right now</summary>
+      <div class="stats" id="sunStats"></div>
+    </details>
+    <details class="card">
+      <summary>The moon right now</summary>
+      <div class="stats" id="stats"></div>
+    </details>
+    <details class="card">
+      <summary>Planets</summary>
+      <div id="planets"></div>
+    </details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Low-precision lunar ephemeris (a few arc-minutes) — great for gameplay, not navigation.
+  Moon and planets are drawn larger than life unless Realistic sizes is on (planets then have a 1 px minimum so they stay findable).
+  Time shown is your device's clock.<br>
+  © 2026 Tiny Puddle™ · Free to use under the MIT License ·
+  <a href="https://github.com/Shrimpifieddev" target="_blank" rel="noopener">Shrimpified on GitHub</a>
+</footer>
+
+<div class="vspace"></div>
+<canvas id="village" aria-hidden="true"></canvas>
+
+<script>
+// =====================================================================
+//  Small helpers
+// =====================================================================
+const $ = id => document.getElementById(id);
+const toRad = deg => deg * Math.PI / 180;
+const toDeg = rad => rad * 180 / Math.PI;
+const wrap360 = deg => ((deg % 360) + 360) % 360;          // any angle -> 0..360
+const wrap180 = deg => ((deg % 360) + 540) % 360 - 180;    // any angle -> -180..180
+const mixColor = (a, b, t) => {   // blend two '#rrggbb' colours, t = 0..1
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = shift => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+};
+const pad2 = n => String(n).padStart(2, '0');
+const toJulianDate = date => date.getTime() / 864e5 + 2440587.5;
+
+// =====================================================================
+//  App state
+// =====================================================================
+let LAT = 59.9139, LON = 10.7522;   // observer position; Oslo is only the fallback start
+let placeName = 'Oslo';
+let simTime = new Date();           // the moment being shown
+let playing = false;
+let speed = 3600;                   // simulated seconds per real second
+let heading = 180;                  // compass direction the view faces (180 = south)
+let realisticSizes = false;
+let sky = null;                     // latest result of computeSky()
+
+// The sky view: equal pixels-per-degree on both axes, so angles are true.
+const VIEW_PX = 1000;
+const VIEW_SPAN_DEG = 83;
+const PX_PER_DEG = VIEW_PX / VIEW_SPAN_DEG;
+const HORIZON_Y = VIEW_PX * 0.7;
+
+const skyCanvas = $('sky');
+const ctx = skyCanvas.getContext('2d');
+
+// =====================================================================
+//  Catalogues
+// =====================================================================
+
+// [name, RA in hours (J2000), Dec in degrees (J2000), magnitude] — bright stars, whole sky
+const STARS = [
+  ['Sirius',6.7525,-16.716,-1.46],['Arcturus',14.261,19.182,-0.05],['Vega',18.6156,38.784,0.03],['Capella',5.2782,45.998,0.08],
+  ['Rigel',5.2423,-8.202,0.13],['Procyon',7.655,5.225,0.34],['Betelgeuse',5.9195,7.407,0.5],['Altair',19.8464,8.868,0.76],
+  ['Aldebaran',4.5987,16.509,0.85],['Antares',16.4901,-26.432,0.96],['Spica',13.4199,-11.161,0.97],['Pollux',7.7553,28.026,1.14],
+  ['Fomalhaut',22.9608,-29.622,1.16],['Deneb',20.6905,45.28,1.25],['Regulus',10.1395,11.967,1.35],['Castor',7.5767,31.888,1.58],
+  ['Bellatrix',5.4189,6.35,1.64],['Elnath',5.4382,28.608,1.65],['Alnilam',5.6036,-1.202,1.69],['Alnitak',5.6793,-1.943,1.77],
+  ['Mintaka',5.5334,-0.299,2.23],['Saiph',5.7959,-9.67,2.06],['Dubhe',11.0621,61.751,1.79],['Merak',11.0307,56.382,2.37],
+  ['Phecda',11.8972,53.695,2.44],['Megrez',12.2571,57.033,3.31],['Alioth',12.9005,55.96,1.77],['Mizar',13.3988,54.925,2.04],
+  ['Alkaid',13.7923,49.313,1.86],['Polaris',2.5302,89.264,1.98],['Kochab',14.8451,74.156,2.08],['Pherkad',15.3455,71.834,3.05],
+  ['Alphard',9.4598,-8.659,1.98],['Hamal',2.1196,23.462,2.0],['Mirfak',3.4054,49.861,1.79],['Algol',3.1361,40.956,2.1],
+  ['Schedar',0.6751,56.537,2.24],['Caph',0.1529,59.15,2.27],['Navi',0.9451,60.717,2.47],['Ruchbah',1.4303,60.235,2.68],
+  ['Segin',1.9067,63.67,3.37],['Alpheratz',0.1398,29.091,2.06],['Mirach',1.1622,35.621,2.05],['Almach',2.065,42.33,2.1],
+  ['Diphda',0.7265,-17.987,2.04],['Enif',21.7364,9.875,2.39],['Markab',23.0793,15.205,2.49],['Scheat',23.0629,28.083,2.42],
+  ['Algenib',0.2206,15.184,2.83],['Sadr',20.3705,40.257,2.23],['Gienah',20.7702,33.97,2.46],['Albireo',19.512,27.96,3.18],
+  ['Rasalhague',17.5822,12.56,2.08],['Rasalgethi',17.2441,14.39,3.0],['Kornephoros',16.5037,21.49,2.77],['Eltanin',17.9434,51.489,2.23],
+  ['Rastaban',17.5072,52.301,2.79],['Thuban',14.0731,64.376,3.65],['Izar',14.7498,27.074,2.35],['Alphecca',15.5781,26.715,2.22],
+  ['Zubenelgenubi',14.8478,-16.042,2.75],['Zubeneschamali',15.2835,-9.383,2.61],['Unukalhai',15.7378,6.426,2.65],['Menkar',3.038,4.09,2.53],
+  ['Alcyone',3.7914,24.105,2.87],['Mebsuta',6.7322,25.131,3.06],['Alhena',6.6285,16.399,1.93],['Mirzam',6.3783,-17.956,1.98],
+  ['Wezen',7.1399,-26.393,1.83],['Menkalinan',5.9921,44.947,1.9],['Tejat',6.3827,22.514,2.88],['Algieba',10.3329,19.842,2.28],
+  ['Denebola',11.8177,14.572,2.14],['Zosma',11.2351,20.524,2.56],['Vindemiatrix',13.0364,10.959,2.83],['Muphrid',13.9114,18.398,2.68],
+  ['Sabik',17.173,-15.725,2.43],['Dschubba',16.0056,-22.622,2.29],['Nunki',18.9211,-26.297,2.05],['Sheliak',18.8347,33.363,3.5],
+  ['Sulafat',18.9824,32.69,3.25],['Tarazed',19.771,10.613,2.72],['Alshain',19.9219,6.407,3.71],['Alderamin',21.3096,62.586,2.45],
+  ['Alfirk',21.4777,70.561,3.2],['Errai',23.6558,77.632,3.21],['Canopus',6.3992,-52.696,-0.74],['Achernar',1.6286,-57.237,0.46],
+  ['Rigil Kent',14.66,-60.834,-0.27],['Hadar',14.0637,-60.373,0.61],['Acrux',12.4433,-63.099,0.76],['Mimosa',12.7953,-59.689,1.25],
+  ['Gacrux',12.5194,-57.113,1.64],['Miaplacidus',9.22,-69.717,1.68],['Avior',8.3752,-59.509,1.86],['Atria',16.8111,-69.028,1.92],
+  ['Peacock',20.4275,-56.735,1.94],['Shaula',17.5601,-37.104,1.62],['Kaus Australis',18.4029,-34.385,1.85],['Sargas',17.622,-42.998,1.87],
+  ['Alnair',22.1372,-46.961,1.74],['Suhail',9.1333,-43.433,2.21],['Naos',8.0597,-40.003,2.25],['Menkent',14.1114,-36.37,2.06],
+  ['Phact',5.6603,-34.074,2.64],['Arneb',5.5455,-17.822,2.58],['Acamar',2.971,-40.305,2.9]
+];
+
+// Planet orbits: JPL low-precision elements, J2000 ecliptic.
+// Order: a, e, I, L, longitude of perihelion, longitude of node, then each one's change per century.
+const ORBITS = {
+  Mercury: [.38709927,.20563593,7.00497902,252.2503235,77.45779628,48.33076593,.00000037,.00001906,-.00594749,149472.67411175,.16047689,-.12534081],
+  Venus:   [.72333566,.00677672,3.39467605,181.9790995,131.60246718,76.67984255,.0000039,-.00004107,-.0007889,58517.81538729,.00268329,-.27769418],
+  Earth:   [1.00000261,.01671123,-.00001531,100.46457166,102.93768193,0,.00000562,-.00004392,-.01294668,35999.37244981,.32327364,0],
+  Mars:    [1.52371034,.0933941,1.84969142,-4.55343205,-23.94362959,49.55953891,.00001847,.00007882,-.00813131,19140.30268499,.44441088,-.29257343],
+  Jupiter: [5.202887,.04838624,1.30439695,34.39644051,14.72847983,100.47390909,-.00011607,-.00013253,-.00183714,3034.74612775,.21252668,.20469106],
+  Saturn:  [9.53667594,.05386179,2.48599187,49.95424423,92.59887831,113.66242448,-.0012506,-.00050991,.00193609,1222.49362201,-.41897216,-.28867794],
+  Uranus:  [19.18916464,.04725744,.77263783,313.23810451,170.9542763,74.01692503,-.00196176,-.00004397,-.00242939,428.48202785,.40805281,.04240589],
+  Neptune: [30.06992276,.00859048,1.77004347,-55.12002969,44.96476227,131.78422574,.00026291,.00005105,.00035372,218.45945325,-.32241464,-.00508664]
+};
+const PLANET_NAMES = ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
+const PLANET_COLOR = { Mercury:'#b9a98f', Venus:'#f7e5a2', Mars:'#e0623a', Jupiter:'#e8b987', Saturn:'#edd488', Uranus:'#8fe6ee', Neptune:'#4a74f0' };
+const PLANET_RADIUS_KM = { Mercury:2439.7, Venus:6051.8, Mars:3389.5, Jupiter:69911, Saturn:58232, Uranus:25362, Neptune:24622 };
+const KM_PER_AU = 149597870.7;
+
+// Apparent magnitude as a function of phase angle (degrees); add 5*log10(r*d) for distance.
+const PLANET_MAGNITUDE = {
+  Mercury: i => -.42 + .038*i - .000273*i*i + 2e-6*i**3,
+  Venus:   i => -4.4 + .0009*i + .000239*i*i - 6.5e-7*i**3,
+  Mars:    i => -1.52 + .016*i,
+  Jupiter: i => -9.4 + .005*i,
+  Saturn:  () => -8.88,
+  Uranus:  () => -7.19,
+  Neptune: () => -6.87
+};
+
+// =====================================================================
+//  Astronomy
+// =====================================================================
+
+// Equatorial (RA/Dec in radians) -> [altitude, azimuth] in degrees for the current observer.
+// lst = local sidereal time in degrees. Azimuth is measured from north, through east.
+function toHorizontal(ra, dec, lst) {
+  const hourAngle = toRad(lst) - ra;
+  const lat = toRad(LAT);
+  const alt = toDeg(Math.asin(
+    Math.sin(dec) * Math.sin(lat) + Math.cos(dec) * Math.cos(lat) * Math.cos(hourAngle)
+  ));
+  const az = wrap360(toDeg(Math.atan2(
+    -Math.cos(dec) * Math.sin(hourAngle),
+    Math.sin(dec) * Math.cos(lat) - Math.cos(dec) * Math.sin(lat) * Math.cos(hourAngle)
+  )));
+  return [alt, az];
+}
+
+// Slide J2000 coordinates forward to "now" (precession). ra/dec in radians.
+function precess(ra, dec, yearsSinceJ2000) {
+  return [
+    ra  + toRad((3.075 + 1.336 * Math.sin(ra) * Math.tan(dec)) * 15 / 3600 * yearsSinceJ2000),
+    dec + toRad(20.04 / 3600 * Math.cos(ra) * yearsSinceJ2000)
+  ];
+}
+
+// Atmospheric refraction (Saemundsson's formula, standard pressure and temperature):
+// true altitude -> apparent altitude, in degrees. Fades out smoothly below the horizon.
+function refract(alt) {
+  if (alt < -3) return alt;
+  const h = Math.max(alt, -1);
+  const arcminutes = 1.02 / Math.tan(toRad(h + 10.3 / (h + 5.11)));
+  return alt + arcminutes / 60 * Math.min(1, (alt + 3) / 2);
+}
+
+// The sun's apparent position for T = centuries since J2000 (accurate to about 0.01°).
+function sunPosition(T) {
+  const M = toRad(wrap360(357.5291092 + 35999.0502909 * T));              // mean anomaly
+  const meanLon = wrap360(280.46646 + 36000.76983 * T + .0003032 * T * T);
+  const centre = (1.914602 - .004817 * T - .000014 * T * T) * Math.sin(M)  // equation of the centre
+               + (.019993 - .000101 * T) * Math.sin(2 * M)
+               + .000289 * Math.sin(3 * M);
+  const trueLon = wrap360(meanLon + centre);
+  const trueAnomaly = M + toRad(centre);
+  const e = .016708634 - .000042037 * T - .0000001267 * T * T;             // orbital eccentricity
+  const distAU = 1.000001018 * (1 - e * e) / (1 + e * Math.cos(trueAnomaly));
+
+  // Nutation and aberration nudge the longitude; nutation also nudges the obliquity.
+  const omega = toRad(125.04 - 1934.136 * T);
+  const apparentLon = toRad(trueLon - .00569 - .00478 * Math.sin(omega));
+  const obliquity = toRad(23.439291 - .0130042 * T + .00256 * Math.cos(omega));
+
+  return {
+    lon: trueLon,
+    ra: Math.atan2(Math.cos(obliquity) * Math.sin(apparentLon), Math.cos(apparentLon)),
+    dec: Math.asin(Math.sin(obliquity) * Math.sin(apparentLon)),
+    distAU,
+    angularRadius: 959.63 / distAU / 3600          // 959.63" is the sun's radius as seen from 1 AU
+  };
+}
+
+// Geometric altitude of the sun's centre at a given moment, for the current place.
+function sunAltitudeAt(date) {
+  const jd = toJulianDate(date), T = (jd - 2451545) / 36525;
+  const sun = sunPosition(T);
+  const gmst = wrap360(280.46061837 + 360.98564736629 * (jd - 2451545) + .000387933 * T * T);
+  return toHorizontal(sun.ra, sun.dec, wrap360(gmst + LON))[0];
+}
+
+// Next sunrise and sunset within 36 hours. The sun "rises" when its centre reaches -0.833°
+// (0.57° of refraction plus its own 0.27° radius), so the upper edge touches the horizon.
+function findSunEvents(from) {
+  const STEP = 5 * 60000, LIMIT = 36 * 3600000, RISE_ALT = -0.833;
+  const startsUp = sunAltitudeAt(from) > RISE_ALT;
+  let prev = sunAltitudeAt(from), rise = null, set = null;
+  for (let t = STEP; t <= LIMIT && !(rise && set); t += STEP) {
+    const when = new Date(from.getTime() + t);
+    const alt = sunAltitudeAt(when);
+    const crossing = () => new Date(when.getTime() - STEP + STEP * (RISE_ALT - prev) / (alt - prev));
+    if (!rise && prev <= RISE_ALT && alt > RISE_ALT) rise = crossing();
+    if (!set  && prev >  RISE_ALT && alt <= RISE_ALT) set = crossing();
+    prev = alt;
+  }
+  return { rise, set, startsUp };
+}
+
+// Heliocentric position (AU, ecliptic) of a planet; T = centuries since J2000.
+function heliocentric(name, T) {
+  const [a0, e0, I0, L0, peri0, node0, aRate, eRate, IRate, LRate, periRate, nodeRate] = ORBITS[name];
+  const a = a0 + aRate * T;
+  const e = e0 + eRate * T;
+  const incl = toRad(I0 + IRate * T);
+  const meanLon = L0 + LRate * T;
+  const peri = peri0 + periRate * T;
+  const node = toRad(node0 + nodeRate * T);
+
+  // Solve Kepler's equation by iteration.
+  const M = toRad(wrap360(meanLon - peri));
+  let E = M;
+  for (let i = 0; i < 12; i++) E = M + e * Math.sin(E);
+
+  const xOrbit = a * (Math.cos(E) - e);
+  const yOrbit = a * Math.sqrt(1 - e * e) * Math.sin(E);
+  const argPeri = toRad(peri) - node;
+
+  const cw = Math.cos(argPeri), sw = Math.sin(argPeri);
+  const cN = Math.cos(node),    sN = Math.sin(node);
+  const cI = Math.cos(incl),    sI = Math.sin(incl);
+  return [
+    (cw*cN - sw*sN*cI) * xOrbit + (-sw*cN - cw*sN*cI) * yOrbit,
+    (cw*sN + sw*cN*cI) * xOrbit + (-sw*sN + cw*cN*cI) * yOrbit,
+    sw*sI * xOrbit + cw*sI * yOrbit
+  ];
+}
+
+// Altitude, azimuth, brightness and true angular size of every planet.
+function computePlanets(jd, lst) {
+  const T = (jd - 2451545) / 36525;
+  const years = (jd - 2451545) / 365.25;
+  const obliquity = toRad(23.43928);
+  const earth = heliocentric('Earth', T);
+  const earthDist = Math.hypot(...earth);
+
+  return PLANET_NAMES.map(name => {
+    const p = heliocentric(name, T);
+    const geo = [p[0] - earth[0], p[1] - earth[1], p[2] - earth[2]];   // as seen from Earth
+    const dist = Math.hypot(...geo);
+    const sunDist = Math.hypot(...p);
+
+    // Phase angle -> apparent magnitude
+    const cosPhase = (sunDist*sunDist + dist*dist - earthDist*earthDist) / (2 * sunDist * dist);
+    const phaseAngle = toDeg(Math.acos(Math.max(-1, Math.min(1, cosPhase))));
+    const mag = PLANET_MAGNITUDE[name](phaseAngle) + 5 * Math.log10(sunDist * dist);
+
+    // Ecliptic -> equatorial, then precess to today
+    const yEq = geo[1] * Math.cos(obliquity) - geo[2] * Math.sin(obliquity);
+    const zEq = geo[1] * Math.sin(obliquity) + geo[2] * Math.cos(obliquity);
+    const ra0 = Math.atan2(yEq, geo[0]);
+    const dec0 = Math.asin(zEq / dist);
+    const [ra, dec] = precess(ra0, dec0, years);
+
+    const [alt, az] = toHorizontal(ra, dec, lst);
+    return { name, alt, az, mag, angularRadius: toDeg(PLANET_RADIUS_KM[name] / (dist * KM_PER_AU)) };
+  });
+}
+
+// Everything the drawing and the side panels need for simTime at the current place.
+function computeSky() {
+  const jd = toJulianDate(simTime);
+  const T = (jd - 2451545) / 36525;
+
+  // --- Moon: mean elements and the main periodic terms ---
+  const meanLon  = wrap360(218.3164477 + 481267.88123421 * T);
+  const D        = toRad(wrap360(297.8501921 + 445267.1114034 * T));   // mean elongation
+  const sunAnom  = toRad(wrap360(357.5291092 + 35999.0502909 * T));    // sun's mean anomaly
+  const moonAnom = toRad(wrap360(134.9633964 + 477198.8675055 * T));
+  const latArg   = toRad(wrap360(93.272095 + 483202.0175233 * T));
+
+  const moonLon = wrap360(meanLon
+    + 6.289 * Math.sin(moonAnom)
+    - 1.274 * Math.sin(moonAnom - 2*D)
+    + .658  * Math.sin(2*D)
+    - .186  * Math.sin(sunAnom)
+    - .059  * Math.sin(2*moonAnom - 2*D)
+    - .057  * Math.sin(moonAnom - 2*D + sunAnom)
+    + .053  * Math.sin(moonAnom + 2*D));
+  const moonLat = 5.128 * Math.sin(latArg)
+    + .281 * Math.sin(moonAnom + latArg)
+    - .278 * Math.sin(latArg - moonAnom)
+    - .173 * Math.sin(2*D - latArg);
+
+  // Distance in km -> true angular radius
+  const moonDistKm = 385000.56
+    - 20905.355 * Math.cos(moonAnom)
+    - 3699.111  * Math.cos(2*D - moonAnom)
+    - 2955.968  * Math.cos(2*D)
+    - 569.925   * Math.cos(2*moonAnom);
+  const moonAngularRadius = toDeg(Math.asin(1737.4 / moonDistKm));
+
+  // --- Sun ---
+  const sun = sunPosition(T);
+  const sunLon = sun.lon;
+
+  // --- Phase ---
+  const elongation = wrap360(moonLon - sunLon);
+  const illuminated = (1 - Math.cos(toRad(elongation))) / 2;
+
+  // --- Ecliptic -> equatorial ---
+  const obliquity = toRad(23.439291 - .0130042 * T);
+  const lonRad = toRad(moonLon), latRad = toRad(moonLat);
+  const moonRA = Math.atan2(
+    Math.sin(lonRad) * Math.cos(obliquity) - Math.tan(latRad) * Math.sin(obliquity),
+    Math.cos(lonRad));
+  const moonDec = Math.asin(
+    Math.sin(latRad) * Math.cos(obliquity) + Math.cos(latRad) * Math.sin(obliquity) * Math.sin(lonRad));
+
+  const sunRA = sun.ra, sunDec = sun.dec;
+
+  // --- Sidereal time, then where they are in the observer's sky ---
+  const gmst = wrap360(280.46061837 + 360.98564736629 * (jd - 2451545) + .000387933 * T * T);
+  const lst = wrap360(gmst + LON);
+
+  let [moonAlt, moonAz] = toHorizontal(moonRA, moonDec, lst);
+  // Parallax: the moon is close, so it sits lower than it would seen from Earth's centre
+  // (horizontal parallax is about 0.95° and shrinks as the moon climbs). Then add refraction.
+  moonAlt -= toDeg(Math.asin(6378.14 / moonDistKm)) * Math.cos(toRad(moonAlt));
+  moonAlt = refract(moonAlt);
+  const [sunAlt, sunAz] = toHorizontal(sunRA, sunDec, lst);
+
+  return {
+    jd, lst, gmst,
+    alt: moonAlt, az: moonAz, angularRadius: moonAngularRadius,
+    sunAlt, sunAz, sunAppAlt: refract(sunAlt), sunUp: sunAlt > -0.833,
+    sunDistAU: sun.distAU, sunAngularRadius: sun.angularRadius,
+    elongation, illuminated,
+    moonRA, moonDec, sunRA, sunDec,
+    planets: computePlanets(jd, lst)
+  };
+}
+
+// =====================================================================
+//  Small text helpers
+// =====================================================================
+const formatForInput = d =>
+  `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+
+const compassName = deg => ['N','NE','E','SE','S','SW','W','NW'][Math.round(wrap360(deg) / 45) % 8];
+
+function phaseName(elong) {
+  const e = wrap360(elong);
+  if (e < 22.5 || e >= 337.5) return 'New Moon';
+  if (e < 67.5)  return 'Waxing Crescent';
+  if (e < 112.5) return 'First Quarter';
+  if (e < 157.5) return 'Waxing Gibbous';
+  if (e < 202.5) return 'Full Moon';
+  if (e < 247.5) return 'Waning Gibbous';
+  if (e < 292.5) return 'Last Quarter';
+  return 'Waning Crescent';
+}
+
+// =====================================================================
+//  Drawing the sky
+// =====================================================================
+
+// Moon disc with its lit side on the right; the caller rotates it toward the sun.
+function drawMoonDisc(cx, cy, radius, illuminated) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, 7);
+  ctx.clip();
+  ctx.fillStyle = '#f2f2f2';
+  ctx.fillRect(cx - radius, cy - radius, 2 * radius, 2 * radius);
+  ctx.fillStyle = '#0d0d0d';              // the shadow: a second disc pushed off to the left
+  ctx.beginPath();
+  ctx.arc(cx - 2 * radius * illuminated, cy, radius, 0, 7);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, 7);
+  ctx.strokeStyle = 'rgba(255,255,255,.2)';
+  ctx.stroke();
+}
+
+function renderSky(s) {
+  const screenX = az  => VIEW_PX / 2 + wrap180(az - heading) * PX_PER_DEG;
+  const screenY = alt => HORIZON_Y - alt * PX_PER_DEG;
+
+  // When the scope is shown small, scale dots and text up so they stay readable.
+  const shrink = (skyCanvas.clientWidth || VIEW_PX) / VIEW_PX;
+  const dotScale = Math.max(1, .55 / shrink);
+  const fontSize = px => Math.round(px * Math.max(1, .85 / shrink));
+
+  // Sky background
+  // Sky brightens from night to day as the sun climbs (full day by ~6° above the horizon)
+  const daylight = Math.max(0, Math.min(1, (s.sunAlt + 6) / 12));
+  let grad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
+  grad.addColorStop(0, mixColor('#000000', '#3f5368', daylight));
+  grad.addColorStop(.7, mixColor('#0b0b0b', '#6f8499', daylight));
+  grad.addColorStop(1, mixColor('#262626', '#a9b8c6', daylight));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, VIEW_PX, VIEW_PX);
+
+  // Stars fade in through twilight and are gone in daylight.
+  const starVisibility = Math.max(0, Math.min(1, (-s.sunAlt - 3) / 15));
+  if (starVisibility > 0) {
+    const years = (s.jd - 2451545) / 365.25;
+    for (const [name, raHours, decDeg, mag] of STARS) {
+      const [ra, dec] = precess(toRad(raHours * 15), toRad(decDeg), years);
+      const [alt, az] = toHorizontal(ra, dec, s.lst);
+      if (alt < -1) continue;
+
+      const x = screenX(az), y = screenY(refract(alt));
+      if (x < -30 || x > VIEW_PX + 30 || y < -30 || y > HORIZON_Y + 5) continue;
+
+      const radius = Math.max(1.1, 3.8 - .8 * mag) * dotScale;
+      const brightness = Math.max(.35, Math.min(1, .8 - .18 * (mag - 1)));
+      ctx.fillStyle = `rgba(255,255,255,${starVisibility * brightness})`;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, 7);
+      ctx.fill();
+
+      if (mag < 1.5) {   // label only the brightest
+        ctx.font = fontSize(12) + 'px system-ui,sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = `rgba(255,255,255,${.45 * starVisibility})`;
+        ctx.fillText(name, x + radius + 5, y + 4);
+      }
+    }
+  }
+
+  // Altitude guide lines
+  ctx.font = fontSize(13) + 'px system-ui,sans-serif';
+  ctx.textAlign = 'left';
+  for (const a of [15, 30, 45, 60]) {
+    ctx.strokeStyle = 'rgba(255,255,255,.12)';
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath();
+    ctx.moveTo(0, screenY(a));
+    ctx.lineTo(VIEW_PX, screenY(a));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,.4)';
+    ctx.fillText(a + '°', VIEW_PX / 2 - 14, screenY(a) - 5);
+  }
+
+  // The ecliptic: the path the sun, moon and planets follow
+  ctx.strokeStyle = 'rgba(255,255,255,.16)';
+  ctx.setLineDash([3, 7]);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  let penDown = false;
+  const tilt = toRad(23.44);
+  for (let lambda = 0; lambda <= 360; lambda += 2) {
+    const l = toRad(lambda);
+    const [alt, az] = toHorizontal(
+      Math.atan2(Math.sin(l) * Math.cos(tilt), Math.cos(l)),
+      Math.asin(Math.sin(tilt) * Math.sin(l)),
+      s.lst);
+    const x = screenX(az), y = screenY(alt);
+    if (alt < 0 || x < -60 || x > VIEW_PX + 60) { penDown = false; continue; }
+    penDown ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    penDown = true;
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Planets
+  for (const p of s.planets) {
+    if (p.alt < -1) continue;
+    const x = screenX(p.az), y = screenY(refract(p.alt));
+    if (x < -40 || x > VIEW_PX + 40 || y < -40 || y > HORIZON_Y + 5) continue;
+
+    // Bright planets show up a little earlier in twilight
+    const visibility = Math.max(0, Math.min(1, (-s.sunAlt - 3 + (p.mag < 0 ? -p.mag * 2 : 0)) / 15));
+    if (visibility <= 0) continue;
+
+    const radius = realisticSizes
+      ? Math.max(1.2, p.angularRadius * PX_PER_DEG)
+      : 1.08 * Math.max(2.2, 4.4 - .9 * p.mag) * dotScale;
+
+    ctx.globalAlpha = visibility;
+    ctx.fillStyle = PLANET_COLOR[p.name];
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 7);
+    ctx.fill();
+
+    if (!realisticSizes) {   // highlight ring to make them easy to spot
+      ctx.strokeStyle = PLANET_COLOR[p.name];
+      ctx.globalAlpha = .55 * visibility;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 4 * dotScale, 0, 7);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.font = 'bold ' + fontSize(13) + 'px system-ui,sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = `rgba(255,255,255,${.85 * visibility})`;
+    ctx.fillText(p.name, x + radius + 9, y + 4);
+  }
+
+  // Sun
+  if (s.sunAppAlt > -3) {
+    const sx = screenX(s.sunAz), sy = screenY(s.sunAppAlt);
+    const sunR = realisticSizes ? Math.max(1.5, s.sunAngularRadius * PX_PER_DEG) : 30 * Math.min(dotScale, 1.5);
+    const sunGlowR = Math.max(sunR, 14);
+    const sunGlow = ctx.createRadialGradient(sx, sy, sunGlowR * .6, sx, sy, sunGlowR * 6);
+    sunGlow.addColorStop(0, 'rgba(255,244,214,.45)');
+    sunGlow.addColorStop(1, 'rgba(255,244,214,0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(sx - sunGlowR * 6, sy - sunGlowR * 6, sunGlowR * 12, sunGlowR * 12);
+    ctx.fillStyle = '#fff6dc';
+    ctx.beginPath();
+    ctx.arc(sx, sy, sunR, 0, 7);
+    ctx.fill();
+  }
+
+  // Moon (hidden while the sun is up)
+  if (s.alt > -3 && !s.sunUp) {
+    const mx = screenX(s.az), my = screenY(s.alt);
+    const radius = realisticSizes
+      ? Math.max(1.5, s.angularRadius * PX_PER_DEG)
+      : 34 * Math.min(dotScale, 1.5);
+    const glowR = realisticSizes ? Math.max(radius, 10) : radius;
+
+    const glow = ctx.createRadialGradient(mx, my, glowR * .8, mx, my, glowR * 5);
+    glow.addColorStop(0, 'rgba(255,255,255,.2)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(mx - glowR * 5, my - glowR * 5, glowR * 10, glowR * 10);
+
+    // Angle of the sun around the moon, measured from "straight up" — this is what tilts the crescent.
+    const dAz = toRad(s.sunAz - s.az), sunA = toRad(s.sunAlt), moonA = toRad(s.alt);
+    const sunAngle = Math.atan2(
+      Math.cos(sunA) * Math.sin(dAz),
+      Math.sin(sunA) * Math.cos(moonA) - Math.cos(sunA) * Math.sin(moonA) * Math.cos(dAz));
+
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.rotate(sunAngle - Math.PI / 2);   // the disc's lit side starts on the right (+x)
+    drawMoonDisc(0, 0, radius, s.illuminated);
+    ctx.restore();
+  }
+
+  // Ground
+  grad = ctx.createLinearGradient(0, HORIZON_Y, 0, VIEW_PX);
+  grad.addColorStop(0, '#2e2e2e');
+  grad.addColorStop(.25, '#1c1c1c');
+  grad.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, HORIZON_Y, VIEW_PX, VIEW_PX - HORIZON_Y);
+  ctx.strokeStyle = 'rgba(255,255,255,.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, HORIZON_Y);
+  ctx.lineTo(VIEW_PX, HORIZON_Y);
+  ctx.stroke();
+
+  // Compass marks along the horizon
+  ctx.textAlign = 'center';
+  const marks = [[0,'N'],[45,'NE'],[90,'E'],[135,'SE'],[180,'S'],[225,'SW'],[270,'W'],[315,'NW']];
+  for (const [deg, label] of marks) {
+    const x = screenX(deg);
+    if (x < -40 || x > VIEW_PX + 40) continue;
+    const isMain = label.length === 1;
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    ctx.font = (isMain ? 'bold ' + fontSize(17) : fontSize(13)) + 'px system-ui,sans-serif';
+    ctx.fillText(label, x, HORIZON_Y + 30);
+    ctx.strokeStyle = 'rgba(255,255,255,.5)';
+    ctx.beginPath();
+    ctx.moveTo(x, HORIZON_Y);
+    ctx.lineTo(x, HORIZON_Y + (isMain ? 11 : 7));
+    ctx.stroke();
+  }
+}
+
+// =====================================================================
+//  Side panels
+// =====================================================================
+function updatePanels(s) {
+  $('stats').innerHTML = `
+    <div class="stat"><span class="l">Altitude</span><span class="v">${s.alt.toFixed(1)}°</span></div>
+    <div class="stat"><span class="l">Azimuth</span><span class="v">${s.az.toFixed(1)}° ${compassName(s.az)}</span></div>
+    <div class="stat"><span class="l">Phase</span><span class="v" style="font-size:1.05rem">${phaseName(s.elongation)}</span></div>
+    <div class="stat"><span class="l">Illuminated</span><span class="v">${Math.round(s.illuminated * 100)}%</span></div>
+    <div class="badge"><span class="dot ${s.alt > 0 ? 'up' : ''}"></span>${s.alt > 0 ? 'Above the horizon' : 'Below the horizon'}</div>`;
+
+  // Highest planets first
+  $('planets').innerHTML = [...s.planets].sort((a, b) => b.alt - a.alt).map(p => `
+    <div class="pl ${p.alt > 0 ? '' : 'dn'}">
+      <span><i class="cd" style="background:${PLANET_COLOR[p.name]}"></i>${p.name}</span>
+      <span>${p.mag >= 0 ? '+' : ''}${p.mag.toFixed(1)}</span>
+      <span>${p.alt > 0 ? p.alt.toFixed(0) + '° · ' + compassName(p.az) : 'below horizon'}</span>
+    </div>`).join('');
+
+  // Little compass: letters swing around as you turn, and grow when they face you
+  $('rose').innerHTML = [[0,'N'],[90,'E'],[180,'S'],[270,'W']].map(([deg, letter]) => {
+    const a = toRad(deg - heading);
+    const size = 10 + 4 * Math.max(0, Math.cos(a));
+    return `<text x="${(50 + 33 * Math.sin(a)).toFixed(1)}" y="${(50 - 33 * Math.cos(a) + size * .35).toFixed(1)}" font-size="${size.toFixed(1)}">${letter}</text>`;
+  }).join('');
+
+  // Sun card (the sunrise/sunset search only runs while the card is open)
+  if ($('sunCard').open) {
+    const ev = findSunEvents(simTime);
+    const when = d => d ? d.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    $('sunStats').innerHTML = `
+      <div class="stat"><span class="l">Altitude</span><span class="v">${s.sunAppAlt.toFixed(1)}°</span></div>
+      <div class="stat"><span class="l">Azimuth</span><span class="v">${s.sunAz.toFixed(1)}° ${compassName(s.sunAz)}</span></div>
+      <div class="stat"><span class="l">Distance</span><span class="v" style="font-size:1.05rem">${(s.sunDistAU * 149.5979).toFixed(2)} M km</span></div>
+      <div class="stat"><span class="l">Angular size</span><span class="v" style="font-size:1.05rem">${(s.sunAngularRadius * 120).toFixed(1)} arcmin</span></div>
+      <div class="stat"><span class="l">Next sunrise</span><span class="v" style="font-size:1.05rem">${when(ev.rise)}</span></div>
+      <div class="stat"><span class="l">Next sunset</span><span class="v" style="font-size:1.05rem">${when(ev.set)}</span></div>
+      <div class="badge"><span class="dot ${s.sunUp ? 'up' : ''}"></span>${s.sunUp ? 'Sun above the horizon' : 'Sun below the horizon'}${!ev.rise && !ev.set ? (ev.startsUp ? ' · midnight sun (no sunset within 36 h)' : ' · polar night (no sunrise within 36 h)') : ''}</div>
+      <p class="tiny" style="grid-column:1/-1;margin:0">Times are in your device's timezone.</p>`;
+  }
+
+  const notes = [];
+  if (s.sunUp) {
+    notes.push(`Daytime here — the sun is ${Math.round(s.sunAppAlt)}° up in the ${compassName(s.sunAz)}; the moon, stars and planets are hidden.`);
+  } else {
+    if (s.sunAlt > -6) notes.push('Twilight — only the brightest objects are showing.');
+    if (s.alt <= 0) notes.push('The moon is below the horizon here right now.');
+    else notes.push(`The moon is ${Math.round(s.alt)}° up in the ${compassName(s.az)} — press “Face moon” to look at it.`);
+  }
+  $('skyNote').textContent = notes.join(' ');
+
+  $('aimLabel').textContent = `Facing ${compassName(heading)} ${Math.round(heading) % 360}°`;
+  $('clock').textContent = simTime.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function redraw() {
+  sky = computeSky();
+  renderSky(sky);
+  updatePanels(sky);
+  drawGlobe();
+}
+
+function setHeading(deg) {
+  heading = wrap360(deg);
+  $('aim').value = Math.round(heading) % 360;
+  redraw();
+}
+
+// =====================================================================
+//  Globe: tap a place and the whole sky moves to it
+// =====================================================================
+const CITIES = [
+  ['Oslo',59.9139,10.7522],['Tromsø',69.6492,18.9553],['Reykjavik',64.1466,-21.9426],['London',51.5074,-0.1278],
+  ['Cairo',30.0444,31.2357],['Mumbai',19.076,72.8777],['Singapore',1.3521,103.8198],['Tokyo',35.6762,139.6503],
+  ['Sydney',-33.8688,151.2093],['Cape Town',-33.9249,18.4241],['Rio',-22.9068,-43.1729],['Quito',-0.1807,-78.4678],
+  ['New York',40.7128,-74.006],['Honolulu',21.3069,-157.8583],['McMurdo',-77.8419,166.6863]
+];
+
+// Coarse hand-drawn outlines as "lat,lon" points — good enough to find your way around, not a real map.
+const parseShapes = text => text.trim().split('\n').map(line => line.trim().split(' ').map(pt => pt.split(',').map(Number)));
+const LAND = parseShapes(`
+71,-156 70,-142 69,-130 68,-115 67,-105 68,-95 63,-90 60,-94 58,-94 55,-83 52,-80 55,-77 58,-78 61,-78 62,-72 60,-65 58,-62 54,-58 52,-56 48,-53 47,-60 46,-64 44,-66 43,-70 41,-70 40,-74 37,-76 35,-76 32,-80 30,-81 27,-80 25,-80 26,-82 28,-83 30,-85 30,-88 29,-90 29,-94 27,-97 22,-98 19,-96 19,-91 21,-90 21,-87 18,-88 16,-88 15,-84 12,-83 9,-82 9,-79 8,-78 8,-80 7,-81 8,-83 10,-86 13,-88 15,-92 16,-95 18,-103 21,-105 24,-108 27,-110 30,-113 32,-117 34,-120 37,-122 40,-124 43,-124 47,-124 49,-125 52,-129 55,-131 58,-136 60,-141 60,-146 59,-150 58,-153 56,-158 57,-162 59,-163 60,-166 63,-166 65,-168 67,-164 69,-163
+83,-30 82,-20 78,-18 75,-20 70,-22 66,-35 62,-42 60,-44 62,-49 66,-53 70,-52 74,-58 77,-67 80,-62 83,-45
+12,-72 11,-62 8,-60 5,-52 2,-50 0,-50 -3,-41 -5,-35 -8,-34 -13,-38 -18,-39 -23,-42 -25,-48 -29,-49 -33,-52 -35,-57 -38,-57 -41,-63 -44,-65 -47,-66 -51,-69 -54,-68 -55,-67 -53,-71 -50,-74 -45,-74 -41,-74 -37,-73 -33,-72 -27,-71 -20,-70 -15,-75 -12,-77 -6,-81 -4,-81 -1,-80 2,-79 6,-77 9,-76 11,-74
+36,-6 37,-9 39,-9.5 41,-8.8 43,-9 43.5,-2 46,-1.5 48,-4.5 48.8,-1.5 49.7,0 51,2 53,4.5 54,8.5 55,8.5 57,8.5 57.5,10.5 56,10.5 55,12 54.5,13 54.5,18 56,21 57.5,22 59,24 60,25 60,22.5 62,21 65,25 65.5,22 63,18 61,17 59,18 56,16 55.5,13 56,12.5 58,11.5 59,11 58,6 58.5,5.5 60,5 62,5.5 63.5,8 65,12 67,14 69,16 70.5,23 71,26 70.5,30 69.5,33 67,41 66,33 65,35 64,38 66,41 68,44 67,53 68,60 70,67 73,70 73.5,80 76,95 76,105 73,108 72,114 73,128 71,133 71,141 70,150 69.5,160 69.5,170 66,179 65,177 62.5,173 60,165 60,163 57,162 55,162 52,157 51,156 53,155 56,155 59,154 59,143 55,137 52.5,141 50,140 47,138 43,132 42,130 40,129 39,127.5 35,129 35,126.5 37,126 39,125 39.5,122 38.5,118 37,121 35,119.5 32,121.5 30,122 28,121 26,119.5 23.5,117 22,114 21,110 20.5,108 19,106 16,108 13,109 10.5,107 8.5,105 10,104 12.5,100 9.5,99.5 7,100.5 2,103.5 1.5,104 4,100.5 6,100 9,98.5 13,98 16.5,97 16,94.5 20,92.5 22,91 21.5,88 19.5,85 17,82.5 15,80 13,80 10,79 8,77.5 10,76 13,74.5 16,73.5 19,72.8 21,72.5 22.5,69 24,67 25.5,66 25,62 25.5,57 27,56 26,56 24,57 22.5,59.5 20,58 17,55 16,52.5 14,48 12.5,44 15,42.5 18,40.5 21,39 24,37.5 27.5,34.5 29,34.5 30,32.5 31,34 33,35.5 36,36 36.5,34.5 36.5,31 36.5,29.5 37,27.5 38.5,26.5 40,26 40.5,27.5 41,29 42,28 41.5,26 40,25 38.5,24 37.5,23 36.5,22.5 38,21 39.5,19.5 40.5,19.5 42,19 43.5,16 45,14 45.5,12.5 44,12.5 42,14.5 41,16 40,18 38.5,16.5 38,15.7 40,15.5 41,13 42,11 43.5,10 44,8.5 43.5,6.5 43,3 42,3 41,1 39.5,0 37.5,-1 36.5,-3 36,-5.5
+37,10 36.8,5 36,0 35.8,-5.5 33.5,-8 32,-9.5 29,-10 27.5,-13 24,-15.5 21,-17 16,-16.5 14.5,-17.5 12,-16.5 9.5,-13.5 7.5,-12.5 6,-10 4.5,-7.5 5,-3 5,0.5 6,3 4.5,8 3.5,9.8 1,9.5 -1,9 -4,11 -9,13 -13,12.5 -17,11.8 -22,14.5 -26,15 -29,16.5 -32.5,18 -34.5,19.5 -34.5,25 -33,28 -30,31 -26,32.8 -22,35.5 -19,36.5 -15.5,40.5 -11,40.5 -6,39 -2,41 1,42 3.5,44.5 8,49 11.8,51 11,44 12.5,43.3 15,40.2 18,38.5 21,37 24,35.5 28,33 30,32.5 31.2,32 31.5,30 31,25 32,21 31,19.5 32.5,15 33,11 36.5,10.5
+-11,132 -12,136 -12,142 -15,145 -19,147 -24,152 -28,153 -34,151 -38,148 -39,146 -38,141 -35,138 -32,134 -32,126 -34,123 -35,117 -32,115 -26,113 -22,114 -20,119 -17,123 -14,127 -12,130
+-72,-180 -72,-150 -72,-120 -72,-90 -72,-60 -72,-30 -72,0 -72,30 -72,60 -72,90 -72,120 -72,150 -72,180 -90,180 -90,-180
+50,-5 51,1 53,0 55,-2 58,-3 58,-5 56,-6 54,-3 53,-4 52,-5
+52,-10 55,-8 54,-6 52,-6
+63,-22 64,-14 66,-15 66,-22 65,-24 64,-22
+31,131 34,135 36,141 41,142 41,140 38,139 36,136 35,132 34,131
+42,140 45,142 43,145 42,143
+-12,49 -16,50 -20,48 -25,45 -24,44 -17,44
+5,95 2,98 -3,104 -5,105 -3,101 0,98
+7,117 2,118 -3,116 -4,114 0,109 2,111
+-6,106 -7,114 -8,114 -7,106
+-2,134 -3,141 -6,147 -10,147 -9,143 -8,138 -4,133
+-41,172 -46,167 -46,170 -44,172 -41,174
+-35,173 -37,178 -41,175 -39,174
+23,-84 22,-77 20,-74 22,-79
+`);
+const LAKES = parseShapes(`
+41,29 41.5,32 42,36 41.2,41 43,40 44.5,38 46.5,36.5 46,33 46,31 44,28.5
+37,54 37,50 39,49 41,49 42,50 44,50 46,49 47,52 46,53 44,51 41,52.5 40,53
+`);
+
+let globeLon = LON, globeLat = 20;       // the point at the centre of the globe
+let globeDrag = null;                    // active pointer drag, if any
+let spinning = true;
+
+const globeCanvas = $('globe');
+const gctx = globeCanvas.getContext('2d');
+const GLOBE_SIZE = 600, GLOBE_RADIUS = 272;
+
+// A small offscreen canvas holds the night-side shading.
+const nightCanvas = document.createElement('canvas');
+nightCanvas.width = nightCanvas.height = 150;
+const nightCtx = nightCanvas.getContext('2d');
+
+// lat/lon -> [x, y, z] on the unit sphere as seen from the globe's current orientation (z > 0 = facing us)
+function projectToSphere(lat, lon) {
+  const p = toRad(lat), l = toRad(lon - globeLon), g = toRad(globeLat);
+  return [
+    Math.cos(p) * Math.sin(l),
+    Math.cos(g) * Math.sin(p) - Math.sin(g) * Math.cos(p) * Math.cos(l),
+    Math.sin(g) * Math.sin(p) + Math.cos(g) * Math.cos(p) * Math.cos(l)
+  ];
+}
+function toGlobePixels(lat, lon) {
+  const v = projectToSphere(lat, lon);
+  return [GLOBE_SIZE / 2 + GLOBE_RADIUS * v[0], GLOBE_SIZE / 2 - GLOBE_RADIUS * v[1], v[2]];
+}
+
+// Stroke a line of lat/lon points, breaking it wherever it goes round the back.
+function traceLine(points) {
+  let penDown = false;
+  gctx.beginPath();
+  for (const [lat, lon] of points) {
+    const [x, y, z] = toGlobePixels(lat, lon);
+    if (z <= 0) { penDown = false; continue; }
+    penDown ? gctx.lineTo(x, y) : gctx.moveTo(x, y);
+    penDown = true;
+  }
+  gctx.stroke();
+}
+
+// Build a filled outline path; points on the far side are pushed to the rim.
+// Returns true if any part is visible.
+function buildPolygonPath(poly) {
+  let anyVisible = false, started = false;
+  gctx.beginPath();
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(b[0] - a[0]), Math.abs(wrap180(b[1] - a[1]))) / 6));
+    for (let j = 0; j < steps; j++) {
+      let [x, y, z] = toGlobePixels(a[0] + (b[0] - a[0]) * j / steps, a[1] + wrap180(b[1] - a[1]) * j / steps);
+      if (z > 0) {
+        anyVisible = true;
+      } else {
+        const dx = x - GLOBE_SIZE / 2, dy = y - GLOBE_SIZE / 2, len = Math.hypot(dx, dy) || 1;
+        x = GLOBE_SIZE / 2 + dx / len * GLOBE_RADIUS;
+        y = GLOBE_SIZE / 2 + dy / len * GLOBE_RADIUS;
+      }
+      started ? gctx.lineTo(x, y) : (gctx.moveTo(x, y), started = true);
+    }
+  }
+  gctx.closePath();
+  return anyVisible;
+}
+
+function drawGlobe() {
+  const s = sky;
+  if (!s) return;
+  const C = GLOBE_SIZE / 2;
+
+  gctx.clearRect(0, 0, GLOBE_SIZE, GLOBE_SIZE);
+  gctx.save();
+  gctx.beginPath();
+  gctx.arc(C, C, GLOBE_RADIUS, 0, 7);
+  gctx.clip();
+
+  // Ocean
+  const ocean = gctx.createRadialGradient(GLOBE_SIZE * .4, GLOBE_SIZE * .36, GLOBE_RADIUS * .1, C, C, GLOBE_RADIUS);
+  ocean.addColorStop(0, '#2b2b2b');
+  ocean.addColorStop(1, '#151515');
+  gctx.fillStyle = ocean;
+  gctx.fillRect(0, 0, GLOBE_SIZE, GLOBE_SIZE);
+
+  // Grid lines
+  gctx.strokeStyle = 'rgba(255,255,255,.08)';
+  gctx.lineWidth = 1;
+  for (let lon = -180; lon < 180; lon += 30) {
+    const line = [];
+    for (let lat = -90; lat <= 90; lat += 5) line.push([lat, lon]);
+    traceLine(line);
+  }
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const line = [];
+    for (let lon = -180; lon <= 180; lon += 5) line.push([lat, lon]);
+    traceLine(line);
+  }
+
+  // Land and lakes
+  gctx.lineWidth = 1.2;
+  for (const poly of LAND) {
+    if (buildPolygonPath(poly)) {
+      gctx.fillStyle = '#474747'; gctx.fill();
+      gctx.strokeStyle = 'rgba(255,255,255,.3)'; gctx.stroke();
+    }
+  }
+  for (const poly of LAKES) {
+    if (buildPolygonPath(poly)) { gctx.fillStyle = '#1a1a1a'; gctx.fill(); }
+  }
+
+  // Night side: shade every pixel by how far it is from the sub-solar point
+  const subSolarLat = toDeg(s.sunDec);
+  const subSolarLon = wrap180(toDeg(s.sunRA) - s.gmst);
+  const sunVec = projectToSphere(subSolarLat, subSolarLon);
+  const shade = nightCtx.createImageData(150, 150);
+  for (let iy = 0; iy < 150; iy++) {
+    for (let ix = 0; ix < 150; ix++) {
+      const x = (ix + .5) / 75 - 1, y = 1 - (iy + .5) / 75, r2 = x*x + y*y;
+      if (r2 > 1) continue;
+      const dot = x * sunVec[0] + y * sunVec[1] + Math.sqrt(1 - r2) * sunVec[2];
+      shade.data[(iy * 150 + ix) * 4 + 3] = Math.max(0, Math.min(1, .5 - dot * 6)) * .65 * 255;
+    }
+  }
+  nightCtx.putImageData(shade, 0, 0);
+  gctx.drawImage(nightCanvas, C - GLOBE_RADIUS, C - GLOBE_RADIUS, 2 * GLOBE_RADIUS, 2 * GLOBE_RADIUS);
+
+  // Markers (only drawn if they're on the visible half)
+  const marker = (lat, lon, drawIt) => {
+    const [x, y, z] = toGlobePixels(lat, lon);
+    if (z > 0) drawIt(x, y);
+  };
+  // moon overhead
+  marker(toDeg(s.moonDec), wrap180(toDeg(s.moonRA) - s.gmst), (x, y) => {
+    gctx.fillStyle = '#bdbdbd'; gctx.strokeStyle = '#000'; gctx.lineWidth = 2;
+    gctx.beginPath(); gctx.arc(x, y, 8, 0, 7); gctx.fill(); gctx.stroke();
+  });
+  // sun overhead
+  marker(subSolarLat, subSolarLon, (x, y) => {
+    gctx.strokeStyle = '#fff'; gctx.lineWidth = 2;
+    gctx.beginPath(); gctx.arc(x, y, 6, 0, 7); gctx.stroke();
+    gctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      gctx.moveTo(x + Math.cos(a) * 9,  y + Math.sin(a) * 9);
+      gctx.lineTo(x + Math.cos(a) * 14, y + Math.sin(a) * 14);
+    }
+    gctx.stroke();
+  });
+  // you
+  marker(LAT, LON, (x, y) => {
+    gctx.fillStyle = '#fff'; gctx.strokeStyle = '#000'; gctx.lineWidth = 3;
+    gctx.beginPath(); gctx.arc(x, y, 6, 0, 7); gctx.fill(); gctx.stroke();
+    gctx.strokeStyle = '#fff'; gctx.lineWidth = 2;
+    gctx.beginPath(); gctx.arc(x, y, 13, 0, 7); gctx.stroke();
+  });
+  gctx.restore();
+
+  // Rim
+  gctx.strokeStyle = '#444';
+  gctx.lineWidth = 2;
+  gctx.beginPath();
+  gctx.arc(C, C, GLOBE_RADIUS, 0, 7);
+  gctx.stroke();
+}
+
+// =====================================================================
+//  Choosing a place
+// =====================================================================
+function nearestCity(lat, lon) {   // within 250 km, else null
+  let best = null, bestDist = 1e9;
+  for (const c of CITIES) {
+    const h = Math.sin(toRad(c[1] - lat) / 2) ** 2
+            + Math.cos(toRad(lat)) * Math.cos(toRad(c[1])) * Math.sin(toRad(c[2] - lon) / 2) ** 2;
+    const km = 12742 * Math.asin(Math.sqrt(h));
+    if (km < bestDist) { bestDist = km; best = c; }
+  }
+  return bestDist < 250 ? best : null;
+}
+
+function updatePlaceLabel() {
+  $('place').textContent = (placeName ? placeName + ' · ' : '')
+    + Math.abs(LAT).toFixed(2) + '°' + (LAT >= 0 ? 'N' : 'S') + ' '
+    + Math.abs(LON).toFixed(2) + '°' + (LON >= 0 ? 'E' : 'W');
+  document.querySelectorAll('#cities button').forEach(b => b.classList.toggle('on', b.textContent === placeName));
+}
+
+function setPlace(lat, lon, name) {
+  LAT = lat;
+  LON = wrap180(lon);
+  const city = nearestCity(lat, lon);
+  placeName = name || (city ? city[0] : '');
+  updatePlaceLabel();
+  // By day look at the sun; at night look at the moon if it's up; otherwise face the sun's side of the sky
+  // (south in the north, north in the south)
+  sky = computeSky();
+  setHeading(sky.sunUp ? sky.sunAz : sky.alt > 0 ? sky.az : (LAT < 0 ? 0 : 180));
+}
+
+// Turn a tap on the globe into a latitude/longitude.
+function pickFromGlobe(px, py) {
+  const x = (px - GLOBE_SIZE / 2) / GLOBE_RADIUS;
+  const y = -(py - GLOBE_SIZE / 2) / GLOBE_RADIUS;
+  const r2 = x*x + y*y;
+  if (r2 > 1) return;                // tapped outside the globe
+  const z = Math.sqrt(1 - r2), g = toRad(globeLat);
+  setPlace(
+    toDeg(Math.asin(z * Math.sin(g) + y * Math.cos(g))),
+    globeLon + toDeg(Math.atan2(x, z * Math.cos(g) - y * Math.sin(g))));
+}
+
+function showLocationMessage(text) { $('locMsg').textContent = text; }
+
+// loud = the person pressed the button (show errors); quiet = automatic attempt at startup
+function useMyLocation(loud) {
+  if (!navigator.geolocation) {
+    if (loud) showLocationMessage('This browser has no location support — enter coordinates above.');
+    return;
+  }
+  if (loud) {
+    showLocationMessage(window.isSecureContext
+      ? 'Finding you…'
+      : 'Location only works on https:// or localhost, not a local file — enter coordinates above.');
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude } = pos.coords;
+      globeLon = longitude;
+      globeLat = Math.max(-60, Math.min(60, latitude));
+      setPlace(latitude, longitude, 'You');
+      showLocationMessage('');
+    },
+    err => {
+      if (!loud) return;
+      showLocationMessage(
+        err.code === 1 ? 'Location is blocked — allow it for this site in your browser settings, or enter coordinates above.'
+        : err.code === 3 ? 'Location timed out — try again or enter coordinates above.'
+        : window.isSecureContext ? 'Location unavailable on this device — enter coordinates above.'
+        : 'Location only works on https:// or localhost, not a local file — enter coordinates above.');
+    },
+    { timeout: 15000, maximumAge: 600000 });
+}
+
+function goToTypedCoordinates() {
+  const nums = $('coord').value.match(/-?\d+(?:\.\d+)?/g);
+  if (!nums || nums.length < 2) { showLocationMessage('Type latitude and longitude, like 59.91, 10.75'); return; }
+  const lat = +nums[0], lon = +nums[1];
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { showLocationMessage('Latitude must be −90…90 and longitude −180…180.'); return; }
+  globeLon = lon;
+  globeLat = Math.max(-60, Math.min(60, lat));
+  setPlace(lat, lon, '');
+  showLocationMessage('');
+}
+
+// =====================================================================
+//  Wiring up the controls
+// =====================================================================
+$('cities').innerHTML = CITIES.map(c => `<button>${c[0]}</button>`).join('');
+$('cities').onclick = e => {
+  const city = CITIES.find(c => c[0] === e.target.textContent);
+  if (!city) return;
+  globeLon = city[2];
+  globeLat = Math.max(-60, Math.min(60, city[1]));
+  setPlace(city[1], city[2]);
+};
+
+$('spinBtn').onclick = e => { spinning = !spinning; e.currentTarget.classList.toggle('on', spinning); };
+$('locBtn').onclick = () => useMyLocation(true);
+$('coordBtn').onclick = goToTypedCoordinates;
+$('coord').addEventListener('keydown', e => { if (e.key === 'Enter') goToTypedCoordinates(); });
+$('realBtn').onclick = e => {
+  realisticSizes = !realisticSizes;
+  e.currentTarget.classList.toggle('on', realisticSizes);
+  e.currentTarget.setAttribute('aria-pressed', realisticSizes);
+  redraw();
+};
+
+// Dragging the globe spins it; a tap (no real movement) picks a place.
+globeCanvas.addEventListener('pointerdown', e => {
+  globeDrag = { moved: false, startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY };
+  globeCanvas.setPointerCapture(e.pointerId);
+});
+globeCanvas.addEventListener('pointermove', e => {
+  if (!globeDrag) return;
+  if (Math.hypot(e.clientX - globeDrag.startX, e.clientY - globeDrag.startY) > 4) globeDrag.moved = true;
+  globeLon = wrap180(globeLon - (e.clientX - globeDrag.lastX) * .4);
+  globeLat = Math.max(-85, Math.min(85, globeLat + (e.clientY - globeDrag.lastY) * .4));
+  globeDrag.lastX = e.clientX;
+  globeDrag.lastY = e.clientY;
+  drawGlobe();
+});
+globeCanvas.addEventListener('pointerup', e => {
+  if (globeDrag && !globeDrag.moved) {
+    const box = globeCanvas.getBoundingClientRect();
+    pickFromGlobe((e.clientX - box.left) / box.width * GLOBE_SIZE, (e.clientY - box.top) / box.height * GLOBE_SIZE);
+  }
+  globeDrag = null;
+});
+globeCanvas.addEventListener('pointercancel', () => { globeDrag = null; });
+updatePlaceLabel();
+
+// View direction
+$('aim').oninput = e => setHeading(+e.target.value);
+$('aimL').onclick = () => setHeading(heading - 10);
+$('aimR').onclick = () => setHeading(heading + 10);
+$('sunCard').addEventListener('toggle', () => redraw());
+$('aimM').onclick = () => setHeading(sky.az);
+$('aimS').onclick = () => setHeading(LAT < 0 ? 0 : 180);
+
+// Dragging the sky turns the view
+const scope = $('scope');
+let skyDragX = null;
+scope.addEventListener('pointerdown', e => { skyDragX = e.clientX; scope.setPointerCapture(e.pointerId); });
+scope.addEventListener('pointermove', e => {
+  if (skyDragX === null) return;
+  const dx = e.clientX - skyDragX;
+  skyDragX = e.clientX;
+  setHeading(heading - dx / scope.getBoundingClientRect().width * VIEW_SPAN_DEG);
+});
+['pointerup', 'pointercancel'].forEach(type => scope.addEventListener(type, () => { skyDragX = null; }));
+
+// Time controls
+$('dt').value = formatForInput(simTime);
+$('dt').onchange = e => {
+  const picked = new Date(e.target.value);
+  if (!isNaN(picked)) { simTime = picked; redraw(); }
+};
+$('nowBtn').onclick = () => { simTime = new Date(); $('dt').value = formatForInput(simTime); redraw(); };
+// Jump forward (up to a day) to the first moment it's properly dark at the chosen place.
+$('nightBtn').onclick = () => {
+  const original = simTime;
+  for (let minutes = 0; minutes <= 24 * 60; minutes += 10) {
+    simTime = new Date(original.getTime() + minutes * 60000);
+    if (computeSky().sunAlt < -15) break;   // well past twilight: stars and planets are out
+  }
+  $('dt').value = formatForInput(simTime);
+  redraw();
+};
+function setPlay(on) { playing = on; $('playBtn').textContent = on ? '⏸ Pause' : '▶ Play'; }
+let autoStarted = false, wasAtBottom = false;
+$('playBtn').onclick = () => { autoStarted = false; setPlay(!playing); };
+// Scrolling to the very bottom (where the tiny village is) presses Play; scrolling back up pauses it again,
+// unless you pressed Play/Pause yourself.
+function checkBottom() {
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 220;
+  if (atBottom && !wasAtBottom && !playing) { setPlay(true); autoStarted = true; }
+  else if (!atBottom && wasAtBottom) { if (autoStarted && playing) setPlay(false); autoStarted = false; }
+  wasAtBottom = atBottom;
+}
+window.addEventListener('scroll', checkBottom, { passive: true });
+window.addEventListener('resize', checkBottom);
+document.querySelectorAll('#speeds button').forEach(btn => btn.onclick = () => {
+  document.querySelectorAll('#speeds button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  speed = +btn.dataset.s;
+});
+
+// =====================================================================
+//  Animation loop: advances simulated time and spins the globe
+// =====================================================================
+let lastFrame = null;
+function frame(now) {
+  if (lastFrame !== null) {
+    const elapsed = now - lastFrame;
+    const globeIsSpinning = spinning && !globeDrag;
+    if (globeIsSpinning) {
+      if (playing) {
+        // Real Earth rotation (one sidereal turn per day) scaled by the time speed, so 1 s/s barely moves it
+        // and 1 h/s turns it about 15° every second. Earth turns eastward, so the view's centre longitude falls.
+        const simSeconds = elapsed / 1000 * speed;
+        globeLon = wrap180(globeLon - simSeconds / 86400 * 360.98564736629);
+      } else {
+        globeLon = wrap180(globeLon + elapsed * .008);   // gentle idle spin while time is paused
+      }
+    }
+
+    if (playing) {
+      simTime = new Date(simTime.getTime() + elapsed * speed);
+      $('dt').value = formatForInput(simTime);
+      redraw();
+    } else if (globeIsSpinning) {
+      drawGlobe();
+    }
+  }
+  lastFrame = now;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// =====================================================================
+//  Tiny village: a little farmer whose day follows the sun above
+// =====================================================================
+const vCanvas = $('village'), vctx = vCanvas.getContext('2d');
+let GY = 140, DOOR = 170, FIRE = 320, MEET = 305, VWL = 1000, FIELD = [440, 510, 580, 650, 720, 790];
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const lerp = (a, b, t) => a + (b - a) * clamp01(t);
+
+// The buyer: walks in from the right, hands over a paper bill, takes a crate and leaves
+function buyerAt(h) {
+  if (h < 17.2 || h >= 18.4) return null;
+  if (h < 17.6)  return { x: lerp(VWL + 24, MEET + 32, (h - 17.2) / .4), pose: 'walk', dir: -1, hat: true };
+  if (h < 17.95) return { x: MEET + 32, pose: h < 17.85 ? 'reach' : 'stand', dir: -1, hat: true };
+  return { x: lerp(MEET + 32, VWL + 24, (h - 17.95) / .45), pose: 'walk', dir: 1, hat: true, carry: true };
+}
+
+// Where the farmer is and what he's doing at a given local solar hour (0..24)
+// One-time event: a few days after you first open the page, a car brings a bench for the campfire
+let EVENT_DAY = null;
+try { EVENT_DAY = +localStorage.getItem('tinyBenchDay') || null; } catch (e) {}
+if (!EVENT_DAY) {
+  EVENT_DAY = Math.floor(Date.now() / 864e5 + LON / 360) + 3;
+  try { localStorage.setItem('tinyBenchDay', EVENT_DAY); } catch (e) {}
+}
+const benchBuilt = (h, D) => D > EVENT_DAY || (D === EVENT_DAY && h >= 14.95);
+
+function carAt(h, D) {
+  if (D !== EVENT_DAY || h < 13 || h >= 15) return null;
+  const cx = FIRE + 150;
+  if (h < 13.4) return { x: lerp(VWL + 70, cx, (h - 13) / .4), dir: -1, bed: true };
+  if (h < 14.5) return { x: cx, dir: -1, bed: h < 14.3 };
+  return { x: lerp(cx, VWL + 70, (h - 14.5) / .5), dir: 1, bed: false };
+}
+
+const CROPS = ['sunflower', 'carrot', 'tomato'];
+const cropType = (i, D) => Math.floor(rnd(Math.floor((D + i) / 6), i + 300) * 3);   // what plot i grows this cycle
+
+function dudeAt(h, D) {
+  const ev = D === EVENT_DAY, bench = benchBuilt(h, D), sitX = bench ? FIRE - 36 : FIRE - 24, DX = FIRE + 150 - 62;
+  if (h < 6 || h >= 21.5) return { inside: true };
+  if (h < 6.5)  return { x: lerp(DOOR, FIELD[0] - 26, (h - 6) / .5), pose: 'walk', dir: 1, what: 'walking to the field' };
+  if (h < 12) {
+    const t = (h - 6.5) / 5.5 * 6, i = Math.min(5, Math.floor(t)), dig = t - i < .5;
+    return { x: FIELD[i] - 26, pose: dig ? 'dig' : 'plant', dir: 1, plot: i, what: dig ? 'digging' : `planting ${CROPS[cropType(i, D)]} seeds` };
+  }
+  if (h < 12.4) return { x: lerp(FIELD[5] - 26, FIRE + 24, (h - 12) / .4), pose: 'walk', dir: -1, what: 'walking to lunch' };
+  if (ev && h < 15.5) {
+    if (h < 13.4) return { x: FIRE + 24, pose: 'sit', dir: -1, what: 'having lunch' };
+    if (h < 13.8) return { x: lerp(FIRE + 24, DX, (h - 13.4) / .4), pose: 'walk', dir: 1, what: 'a car is here!' };
+    if (h < 14.3) return { x: DX, pose: h >= 13.9 && h < 14.15 ? 'reach' : 'stand', dir: 1, what: 'buying a bench' };
+    if (h < 14.8) return { x: lerp(DX, FIRE - 70, (h - 14.3) / .5), pose: 'walk', dir: -1, carryBench: true, what: 'carrying the bench' };
+    if (h < 15.1) return { x: FIRE - 70, pose: 'plant', dir: 1, what: 'placing the bench' };
+    return { x: lerp(FIRE - 70, FIELD[5] + 26, (h - 15.1) / .4), pose: 'walk', dir: 1, what: 'back to work' };
+  }
+  if (h < 13)   return { x: FIRE + 24, pose: 'sit', dir: -1, what: 'having lunch' };
+  if (h < 13.5) return { x: lerp(FIRE + 24, FIELD[5] + 26, (h - 13) / .5), pose: 'walk', dir: 1, what: 'back to work' };
+  if (h < 17) {
+    const t = ((h - (ev ? 15.5 : 13.5)) / (ev ? 1.5 : 3.5)) * 6, i = 5 - Math.min(5, Math.floor(t));
+    return { x: FIELD[i] + 26, pose: 'water', dir: -1, what: 'watering the crops' };
+  }
+  if (h < 17.4) return { x: lerp(FIELD[0] + 26, MEET, (h - 17) / .4), pose: 'walk', dir: -1, what: 'heading home' };
+  if (h < 18)   return { x: MEET, pose: h >= 17.7 && h < 17.95 ? 'reach' : 'stand', dir: 1,
+                         what: h < 17.6 ? 'waiting for the buyer' : h < 17.95 ? 'selling a crate' : 'counting his money' };
+  if (h < 18.5) return { x: lerp(MEET, sitX, (h - 18) / .5), pose: 'walk', dir: 1, what: 'heading to the fire' };
+  if (h < 21)   return { x: sitX, pose: 'sit', dir: 1, bench, what: bench ? 'sitting on his new bench' : 'sitting by the fire' };
+  return { x: lerp(sitX, DOOR, (h - 21) / .5), pose: 'walk', dir: -1, what: 'heading to bed' };
+}
+
+// ---- random little events: each day a few may happen (same every time you replay that day) ----
+const EVENTS = [   // [name, chance per day, earliest hour, latest hour, duration in hours]
+  ['bird', .35, 6.5, 17, .25], ['butterfly', .3, 7, 17, .6], ['wave', .3, 18.6, 20.9, .12], ['sneeze', .25, 7, 17, .08],
+  ['chicken', .3, 7, 17, 2], ['snail', .25, 6, 20, 8], ['cat', .3, 18.5, 21, 1.8], ['doze', .3, 19.2, 21, .7],
+  ['rain', .2, 8, 16, 1.2], ['star', .35, 22, 23.8, .15]];
+const rnd = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+function activeEvents(h, D) {
+  const out = [];
+  EVENTS.forEach(([name, prob, a, b, dur], i) => {
+    if (rnd(D, i) > prob) return;
+    const p = (h - (a + rnd(D, i + 50) * (b - a - dur))) / dur;
+    if (p >= 0 && p < 1) out.push([name, p]);
+  });
+  return out;
+}
+function vSay(txt, x, y, a) {
+  vctx.save(); vctx.globalAlpha = a; vctx.font = 'italic 13px Georgia, serif'; vctx.textAlign = 'center'; vctx.fillText(txt, x, y); vctx.restore();
+}
+const headXY = o => [o.x + o.dir * (o.pose === 'plant' ? 11 : 0),
+  GY - (o.hop || 0) - (o.pose === 'sit' ? 22 + (o.bench ? 8 : 0) : o.pose === 'plant' ? 22 : 29) - 6];
+
+// ---- apple tree by the house: it only grows with the seasons, nobody touches it ----
+function seasonFrac(ms) {   // 0 = new year (flipped for the southern hemisphere)
+  const d = new Date(ms), doy = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5;
+  return (doy / 365 + (LAT < 0 ? .5 : 0)) % 1;
+}
+const APPLES = [[-11, -58], [-4, -65], [6, -60], [12, -52], [-13, -48], [0, -50], [8, -67], [-7, -55]];
+function drawTree(x, f, ink) {
+  vLine(x - 3, GY, x - 2, GY - 32); vLine(x + 3, GY, x + 2, GY - 32);
+  vLine(x, GY - 32, x - 8, GY - 44); vLine(x, GY - 32, x + 9, GY - 45);
+  if (f > .9 || f < .22) vctx.setLineDash([3, 3]);      // winter: bare, dashed crown
+  vCircle(x, GY - 53, 19);
+  vctx.setLineDash([]);
+  let n = 0, r = 2, col = '#8fb85a', fallen = 0;
+  if (f >= .28 && f < .36) {                             // spring blossom
+    APPLES.forEach(([ox, oy]) => vCircle(x + ox, GY + oy, 1));
+  } else if (f >= .36 && f < .52) { n = 8; r = 1.2 + (f - .36) / .16 * 1.4; }                          // small green apples grow
+  else if (f >= .52 && f < .62) { n = 8; r = 2.6; col = mixColor('#8fb85a', '#e0524a', (f - .52) / .1); }   // ripening
+  else if (f >= .62 && f < .8) { n = 8; r = 2.6; col = '#e0524a'; }                                    // ripe
+  else if (f >= .8 && f < .9) { const q = (f - .8) / .1; n = Math.ceil(8 * (1 - q)); r = 2.6; col = '#e0524a'; fallen = Math.round(q * 4); }   // falling
+  vctx.fillStyle = col;
+  APPLES.slice(0, n).forEach(([ox, oy]) => vCircle(x + ox, GY + oy, r, true));
+  [-9, -5, 10, 14].slice(0, fallen).forEach(ox => vCircle(x + ox, GY - 1.5, 2.2, true));
+  vctx.fillStyle = ink;
+}
+
+// A bunny sometimes comes to sleep under the tree for the night
+function bunnyState(h, D) {
+  const bx = DOOR - 96;
+  if (h >= 21.2 && rnd(D, 900) < .45) return h < 21.5 ? { mode: 'arrive', x: lerp(-20, bx, (h - 21.2) / .3), dir: 1 } : { mode: 'sleep', x: bx, dir: 1 };
+  if (h < 5.8 && rnd(D - 1, 900) < .45) return h < 5.3 ? { mode: 'sleep', x: bx, dir: 1 } : { mode: 'leave', x: lerp(bx, -20, (h - 5.3) / .5), dir: -1 };
+  return null;
+}
+function drawBunny(b, t) {
+  vctx.save(); vctx.translate(b.x, GY); vctx.scale(b.dir, 1);
+  if (b.mode === 'sleep') {
+    vCircle(0, -4, 4.5); vCircle(5.5, -3.5, 3); vLine(4, -6, -1, -8.5); vLine(6.5, -6, 1, -10); vCircle(-5, -3.5, 1.3, true);
+  } else {
+    vctx.translate(0, -Math.abs(Math.sin(t * 9)) * 6);
+    vCircle(0, -5, 4.5); vCircle(5.5, -8, 3); vLine(4.5, -10.5, 3.5, -17); vLine(6.5, -10.5, 7.5, -17); vCircle(-5, -5, 1.3, true);
+  }
+  vctx.restore();
+}
+
+function vBench(x, gy, k) {
+  const w = 17 * k, sy = gy - 9 * k, a = x - w + 2 * k, b = x + w - 2 * k;
+  vLine(x - w, sy, x + w, sy); vLine(a, sy, a, gy); vLine(b, sy, b, gy);
+  vLine(x - w, sy - 7 * k, x + w, sy - 7 * k); vLine(a, sy - 7 * k, a, sy); vLine(b, sy - 7 * k, b, sy);
+}
+
+function drawCar(c) {
+  vctx.save(); vctx.translate(c.x, GY); vctx.scale(c.dir, 1);
+  vctx.beginPath(); vctx.moveTo(-24, -6); vctx.lineTo(-24, -14); vctx.lineTo(0, -14); vctx.lineTo(0, -22); vctx.lineTo(11, -22);
+  vctx.lineTo(17, -14); vctx.lineTo(22, -14); vctx.lineTo(22, -6); vctx.closePath(); vctx.stroke();
+  vctx.strokeRect(3, -20, 6, 4);
+  vCircle(-13, -4, 4); vCircle(12, -4, 4);
+  if (c.bed) vBench(-12, -14, .6);
+  vctx.restore();
+}
+
+
+function vLine(x1, y1, x2, y2) { vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2); vctx.stroke(); }
+function vCircle(x, y, r, fill) { vctx.beginPath(); vctx.arc(x, y, r, 0, 7); fill ? vctx.fill() : vctx.stroke(); }
+
+function drawDude(d, t, still, ink) {
+  vctx.save();
+  vctx.translate(d.x, GY - (d.hop || 0)); vctx.scale(d.dir, 1);
+  vctx.strokeStyle = ink; vctx.fillStyle = ink; vctx.lineWidth = 1.7; vctx.lineCap = 'round'; vctx.lineJoin = 'round';
+  const sw = Math.sin(still ? 1 : t * 9) * .75;
+  if (d.pose === 'sit') {
+    const u = d.bench ? 8 : 0;
+    vCircle(0, -22 - u, 4); vLine(0, -18 - u, 0, -6 - u);
+    vLine(0, -6 - u, 10, -6 - u); vLine(10, -6 - u, 10, 0); vLine(0, -6 - u, 7, -5 - u); vLine(7, -5 - u, 7, 0);
+    vLine(0, -16 - u, 8, -11 - u);
+  } else if (d.pose === 'plant') {
+    const b = Math.sin(t * 5) * 2;
+    vCircle(11, -22 + b / 2, 4); vLine(0, -13, 7, -19 + b / 2); vLine(7, -19 + b / 2, 10, -18);
+    vLine(7, -18 + b / 2, 14, -6 + b); vLine(0, -13, -4, 0); vLine(0, -13, 4, 0);
+  } else {
+    vCircle(0, -29, 4); vLine(0, -25, 0, -13);
+    const f = d.pose === 'walk' ? sw * 8 : 3;
+    vLine(0, -13, f, 0); vLine(0, -13, -f, 0);
+    if (d.pose === 'walk') { vLine(0, -22, -sw * 6, -12); vLine(0, -22, sw * 6, -12); }
+    else if (d.pose === 'dig') {
+      const lift = (Math.sin(t * 3) + 1) / 2 * 7, tip = -2 - lift;
+      vLine(10, tip, 10, tip - 24);                           // handle
+      vLine(10, tip - 24, 13, tip - 24);                      // grip
+      vLine(7, tip, 13, tip); vLine(7, tip, 8, tip + 2); vLine(13, tip, 12, tip + 2);   // blade
+      vLine(0, -23, 10, tip - 21); vLine(0, -23, 10, tip - 12);   // arms on the handle
+    } else if (d.pose === 'water') {
+      vLine(0, -22, 11, -19); vLine(0, -22, 8, -17);
+      vctx.strokeRect(10, -22, 7, 6); vLine(17, -21, 21, -24);
+      for (let k = 0; k < 3; k++) { const q = (t * 2 + k / 3) % 1; vCircle(22 + q * 4, -22 + q * 22, .9, true); }
+    } else if (d.pose === 'reach') { vLine(0, -22, 11, -20); vLine(0, -22, -5, -13);
+    } else { vLine(0, -22, -5, -13); vLine(0, -22, 5, -13); }
+    if (d.hat) { vLine(-5, -33, 5, -33); vLine(-3, -33, -3, -36); vLine(-3, -36, 3, -36); vLine(3, -36, 3, -33); }
+    if (d.carry) vctx.strokeRect(4, -26, 10, 9);
+    if (d.carryBench) vBench(9, -12, .5);
+    if (d.wave) { const sy = d.pose === 'sit' ? -16 - (d.bench ? 8 : 0) : -22; vLine(0, sy, 8 + Math.sin(t * 12) * 3, sy - 11); }
+  }
+  vctx.restore();
+}
+
+function drawVillage(now) {
+  const dpr = window.devicePixelRatio || 1, cw = vCanvas.clientWidth, ch = vCanvas.clientHeight;
+  if (!cw) return;
+  if (vCanvas.width !== Math.round(cw * dpr)) { vCanvas.width = Math.round(cw * dpr); vCanvas.height = Math.round(ch * dpr); }
+  const s = Math.max(.4, Math.min(.65, cw / 1800)), VW = cw / s;
+  GY = ch / s; DOOR = .17 * VW; MEET = DOOR + 135; VWL = VW; FIRE = .34 * VW; FIELD = [.46, .53, .6, .67, .74, .81].map(f => f * VW);
+  vctx.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
+  vctx.clearRect(0, 0, VW, GY + 2);
+
+  const t = now / 1000, ink = '#f2f2f2';
+  const h = hoursOf(vTime), D = dayOf(vTime), dark = true;   // the village's own clock (see stepVillage)
+  vctx.strokeStyle = ink; vctx.fillStyle = ink; vctx.lineWidth = 1.5; vctx.lineCap = 'round';
+
+  // crops grow day by day, then get harvested (the page's bottom line is the ground)
+  FIELD.forEach((fx, i) => {
+    const p = (((D + i) % 6) + h / 24) / 6, ht = 3 + p * 22, ty = cropType(i, D);
+    if (ty === 0) {            // sunflower: tall stem, big yellow head once grown
+      vLine(fx, GY, fx, GY - ht); vLine(fx, GY - ht * .5, fx + 5, GY - ht * .5 - 3);
+      if (p > .35) { vctx.fillStyle = '#f5d54a'; vCircle(fx, GY - ht - 3, 2 + p * 4, true); vctx.fillStyle = ink; vCircle(fx, GY - ht - 3, 1.3, true); }
+    } else if (ty === 1) {     // carrot: leafy fan, orange tip peeks out of the ground
+      const l = 4 + p * 12;
+      vLine(fx, GY, fx - l * .5, GY - l); vLine(fx, GY, fx, GY - l * 1.15); vLine(fx, GY, fx + l * .5, GY - l);
+      if (p > .5) { vctx.fillStyle = '#f5914a'; vctx.beginPath(); vctx.arc(fx, GY, 3.2, Math.PI, 0); vctx.fill(); vctx.fillStyle = ink; }
+    } else {                   // tomato: bushy plant, red fruit when ripe
+      vLine(fx, GY, fx, GY - ht * .8);
+      vLine(fx, GY - ht * .35, fx - 6, GY - ht * .35 - 4); vLine(fx, GY - ht * .6, fx + 6, GY - ht * .6 - 4); vLine(fx, GY - ht * .8, fx - 4, GY - ht * .8 - 4);
+      if (p > .7) { vctx.fillStyle = '#e0524a'; vCircle(fx - 4, GY - ht * .35, 2.4, true); vCircle(fx + 4, GY - ht * .55, 2.4, true); vctx.fillStyle = ink; }
+    }
+  });
+
+  // house
+  const d = dudeAt(h, D), asleep = h < 6 || h >= 22.5;
+  const lit = dark && ((h >= 17.5 && h < 22.5) || (h >= 5 && h < 6.5));
+  const wx = DOOR + 24;
+  vctx.strokeRect(DOOR - 60, GY - 62, 120, 62);
+  vctx.beginPath(); vctx.moveTo(DOOR - 68, GY - 62); vctx.lineTo(DOOR, GY - 100); vctx.lineTo(DOOR + 68, GY - 62); vctx.closePath(); vctx.stroke();
+  vctx.strokeRect(DOOR - 10, GY - 38, 20, 38);
+  drawTree(DOOR - 110, seasonFrac(vTime), ink);
+  if (lit) { vctx.fillStyle = '#f5d58a'; vctx.fillRect(wx, GY - 48, 24, 18); vctx.fillStyle = ink; }
+  vctx.strokeRect(wx, GY - 48, 24, 18); vLine(wx + 12, GY - 48, wx + 12, GY - 30);
+  const nCrates = 2 + (h >= 12 ? 1 : 0) - (h >= 17.95 ? 1 : 0);
+  for (let c = 0; c < nCrates; c++) vctx.strokeRect(DOOR + 76 + (c % 3) * 13, GY - 12 * (Math.floor(c / 3) + 1), 12, 11);   // harvest crates
+  if (asleep) {
+    vctx.font = 'italic 13px Georgia, serif';
+    for (let z = 0; z < 3; z++) { const q = (t * .5 + z / 3) % 1; vctx.globalAlpha = 1 - q; vctx.fillText('z', wx + 28 + q * 18 + z * 4, GY - 50 - q * 28); }
+    vctx.globalAlpha = 1;
+  }
+
+  // campfire
+  if (h >= 12 && h < 21.5) {
+    vLine(FIRE - 8, GY, FIRE + 8, GY - 4); vLine(FIRE + 8, GY, FIRE - 8, GY - 4);
+    const fl = 9 + Math.sin(t * 11) * 2.5 + Math.sin(t * 17) * 1.5;
+    vctx.fillStyle = '#f5b45a'; vctx.beginPath(); vctx.moveTo(FIRE - 6, GY - 4); vctx.quadraticCurveTo(FIRE, GY - 4 - fl * 1.6, FIRE + 6, GY - 4); vctx.fill();
+  }
+
+  if (benchBuilt(h, D)) vBench(FIRE - 36, GY, 1);
+  const car = carAt(h, D);
+  if (car) {
+    drawCar(car);
+    if (h >= 13.4 && h < 14.5) {   // the driver steps out and takes the money
+      const dr = { x: car.x - 30, pose: h >= 13.95 && h < 14.2 ? 'reach' : 'stand', dir: -1, hat: true };
+      drawDude(dr, t, false, ink);
+      if (h >= 13.95 && h < 14.15) {
+        const bx = lerp(FIRE + 150 - 62 + 11, dr.x - 11, (h - 13.95) / .2);
+        vctx.strokeRect(bx - 4, GY - 23, 8, 4); vLine(bx - 2, GY - 21, bx + 2, GY - 21);
+      }
+    }
+  }
+  // ---- random events ----
+  const evs = activeEvents(h, D), E = n => { const x = evs.find(v => v[0] === n); return x ? x[1] : -1; };
+  const flip = rnd(D, 77) > .5 ? 1 : -1;
+  let e, extra = '';
+  vctx.fillStyle = ink; vctx.strokeStyle = ink; vctx.lineWidth = 1.5;
+  if (!d.inside && (e = E('sneeze')) >= 0) { d.hop = e > .5 && e < .75 ? 5 : 0; extra = 'achoo!'; }
+  if (!d.inside && E('wave') >= 0 && (d.pose === 'sit' || d.pose === 'stand')) { d.wave = true; extra = 'waving at you'; }
+  if ((e = E('rain')) >= 0) {
+    const cx = lerp(-50, VWL + 50, e), cy = GY - 78;
+    vctx.beginPath(); vctx.moveTo(cx - 18, cy + 7); vctx.quadraticCurveTo(cx - 24, cy - 3, cx - 12, cy - 3); vctx.quadraticCurveTo(cx - 10, cy - 14, cx + 2, cy - 9);
+    vctx.quadraticCurveTo(cx + 12, cy - 14, cx + 14, cy - 3); vctx.quadraticCurveTo(cx + 26, cy - 3, cx + 18, cy + 7); vctx.closePath(); vctx.stroke();
+    for (let k = -2; k <= 2; k++) { const y0 = cy + 12 + ((t * 70 + k * 23) % (GY - cy - 18)); vLine(cx + k * 8, y0, cx + k * 8 - 1.5, y0 + 5); }
+    extra = 'a little rain cloud passes';
+  }
+  if ((e = E('star')) >= 0) { const x = lerp(VWL * .8, VWL * .45, e), y = lerp(GY - 100, GY - 65, e); vLine(x, y, x + 16, y - 6); vCircle(x, y, 1.5, true); extra = 'a shooting star'; }
+  if ((e = E('chicken')) >= 0) {
+    const cx = flip > 0 ? lerp(-20, VWL + 20, e) : lerp(VWL + 20, -20, e), pk = Math.max(0, Math.sin(t * 5)) * 3, lg = Math.sin(t * 12) * 3;
+    vctx.save(); vctx.translate(cx, GY); vctx.scale(flip, 1);
+    vCircle(0, -8, 5, true); vCircle(5, -14 + pk, 2.5, true); vLine(7, -14 + pk, 10, -13 + pk); vLine(-5, -9, -9, -13);
+    vLine(-1, -4, -1 + lg, 0); vLine(2, -4, 2 - lg, 0);
+    vctx.restore(); extra = extra || 'a chicken wandered through';
+  }
+  if ((e = E('snail')) >= 0) {
+    const sx = flip > 0 ? lerp(-12, VWL + 12, e) : lerp(VWL + 12, -12, e);
+    vctx.save(); vctx.translate(sx, GY); vctx.scale(flip, 1);
+    vLine(-6, -1, 6, -1); vCircle(-1, -5, 3.5); vCircle(-1, -5, 1, true); vLine(6, -1, 8, -6); vLine(4, -1, 5, -6);
+    vctx.restore(); extra = extra || 'a snail is racing across';
+  }
+  if ((e = E('cat')) >= 0) {
+    vctx.save(); vctx.translate(FIRE + 24, GY); vctx.scale(-1, 1);
+    vCircle(0, -5, 5); vCircle(2, -13, 3.5); vLine(.5, -15.5, 0, -19); vLine(0, -19, 2.5, -16.5); vLine(3.5, -16.5, 5, -19); vLine(5, -19, 5.5, -15.5);
+    vLine(-5, -3, -10, -4 + Math.sin(t * 3) * 4);
+    vctx.restore();
+    if (e > .2 && e < .3) vSay('meow', FIRE + 24, GY - 26, 1);
+    extra = extra || 'a cat joined him';
+  }
+  const bn = bunnyState(h, D);
+  if (bn) {
+    drawBunny(bn, t);
+    if (bn.mode === 'sleep') for (let k = 0; k < 2; k++) { const q = (t * .4 + k / 2) % 1; vSay('z', bn.x + 8 + q * 8, GY - 12 - q * 14, 1 - q); }
+    extra = extra || 'a bunny is sleeping under the tree';
+  }
+  if (!d.inside) drawDude(d, t, !playing && d.pose === 'walk', ink);
+  if (!d.inside) {
+    const [hx, hy] = headXY(d);
+    if (E('sneeze') >= 0 && E('sneeze') > .5) vSay('achoo!', hx, hy - 8, 1);
+    if (E('wave') >= 0 && d.wave) vSay('hi!', hx + d.dir * 10, hy - 10, 1);
+    if ((e = E('doze')) >= 0 && d.pose === 'sit') {
+      for (let k = 0; k < 3; k++) { const q = (t * .5 + k / 3) % 1; vSay('z', hx + 8 + q * 10, hy - 4 - q * 14, 1 - q); }
+      extra = 'dozing off';
+    }
+    if ((e = E('butterfly')) >= 0) {
+      const bx = hx + Math.cos(t * 2) * 14, by = hy - 4 + Math.sin(t * 3) * 7, w = 2 + Math.abs(Math.sin(t * 14)) * 3;
+      vLine(bx, by, bx - w, by - 3); vLine(bx, by, bx + w, by - 3); vLine(bx, by, bx - w, by + 2); vLine(bx, by, bx + w, by + 2);
+      extra = extra || 'a butterfly is following him';
+    }
+    if ((e = E('bird')) >= 0) {
+      const fly = e < .25 || e >= .7;
+      const bx = e < .25 ? lerp(hx + 50, hx, e / .25) : e < .7 ? hx : lerp(hx, hx - 50, (e - .7) / .3);
+      const by = e < .25 ? lerp(hy - 40, hy, e / .25) : e < .7 ? hy : lerp(hy, hy - 45, (e - .7) / .3);
+      vCircle(bx, by, 2.6, true); vLine(bx + 2, by, bx + 5, by + .5); vLine(bx - 2, by, bx - 6, by + 1);
+      vLine(bx, by - 1, bx - 3, by - 4 - (fly ? Math.sin(t * 30) * 4 : 0));
+      if (e > .35 && e < .55) vSay('tweet', bx, by - 7, 1);
+      extra = 'a bird landed on him';
+    }
+  }
+  const bu = buyerAt(h);
+  if (bu) {
+    drawDude(bu, t, !playing && bu.pose === 'walk', ink);
+    if (h >= 17.65 && h < 17.9) {   // the paper bill changes hands
+      const bx = lerp(bu.x - 11, MEET + 11, (h - 17.65) / .25);
+      vctx.strokeRect(bx - 4, GY - 23, 8, 4); vLine(bx - 2, GY - 21, bx + 2, GY - 21);
+    }
+  }
+
+  const msg = d.inside ? (asleep ? 'asleep' : 'getting ready for bed') : d.what;
+  const txt = `${pad2(Math.floor(h))}:${pad2(Math.floor(h % 1 * 60))} solar · ${msg}${extra ? ' · ' + extra : ''}`;
+  if ($('villageStatus').textContent !== txt) $('villageStatus').textContent = txt;
+}
+
+// The village has its own clock. It follows the planet's time, but whenever something fun happens it slows right
+// down (only the village, never the sky) so you can actually watch it, then catches back up.
+let vTime = null, vLast = null;
+const hoursOf = ms => (((ms / 36e5 + LON / 15) % 24) + 24) % 24;
+const dayOf = ms => Math.floor(ms / 864e5 + LON / 360);
+const SLOW_SECS = { bird: 10, butterfly: 12, wave: 6, sneeze: 5, chicken: 14, cat: 16, doze: 10, rain: 14, star: 6 };   // real seconds each lasts
+
+function interaction(h, D) {   // sim-hours per real second the village should run at right now, or null
+  let v = null;
+  const use = x => { v = v === null ? x : Math.min(v, x); };
+  activeEvents(h, D).forEach(([name]) => { if (SLOW_SECS[name]) use(EVENTS.find(e => e[0] === name)[4] / SLOW_SECS[name]); });
+  if (D === EVENT_DAY && h >= 13 && h < 15.5) use(2.5 / 20);
+  const bn = bunnyState(h, D); if (bn && bn.mode !== 'sleep') use(.4 / 5);   // bunny hopping in / out             // the bench delivery
+  if (h >= 6.5 && h < 12) { const t = (h - 6.5) / 5.5 * 6; if (t - Math.floor(t) >= .5) use(.46 / 2); }   // planting
+  return v;
+}
+
+function stepVillage(now) {
+  const dt = vLast === null ? 0 : Math.min(now - vLast, 100);
+  vLast = now;
+  const target = simTime.getTime();
+  if (vTime === null || !playing || target < vTime || target - vTime > 72 * 36e5) { vTime = target; return; }
+  const sp = speed / 3600, want = interaction(hoursOf(vTime), dayOf(vTime));
+  const rate = want !== null ? Math.min(want, sp) : (vTime < target ? sp * 6 : sp);
+  vTime = Math.min(vTime + dt / 1000 * rate * 36e5, want === null ? target : Infinity);
+}
+
+function villageLoop(now) { stepVillage(now); if (sky) drawVillage(now); requestAnimationFrame(villageLoop); }
+requestAnimationFrame(villageLoop);
+
+window.addEventListener('resize', redraw);
+redraw();
+useMyLocation(false);   // start at the real location if the browser allows it; otherwise stay on the fallback
+</script>
+</body>
+</html>
